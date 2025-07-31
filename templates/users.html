@@ -3,15 +3,21 @@
 <h2>👥 Gestione Utenti</h2>
 <a href="{{ url_for('users_add') }}" class="btn btn-primary mb-3">➕ Aggiungi Utente</a>
 <table class="table">
-  <thead><tr><th>ID</th><th>Username</th><th>Admin</th><th>Forza cambio</th><th>Azioni</th></tr></thead>
+  <thead><tr><th>ID</th><th>Username</th><th>Admin</th><th>Superadmin</th><th>Forza cambio</th><th>Azioni</th></tr></thead>
   <tbody>
     {% for u in users %}
     <tr>
-      <td>{{ u[0] }}</td>
-      <td>{{ u[1] }}</td>
-      <td>{{ 'Sì' if u[3] else 'No' }}</td>
-      <td>{{ 'Sì' if u[4] else 'No' }}</td>
-      <td><a href="{{ url_for('users_delete', uid=u[0]) }}" class="btn btn-danger btn-sm">Elimina</a></td>
+      <td>{{ u.id if u.id is defined else u[0] }}</td>
+      <td>{{ u.username if u.username is defined else u[1] }}</td>
+      <td>{{ 'Sì' if u.is_admin else 'No' }}</td>
+      <td>{{ 'Sì' if u.is_superadmin else 'No' }}</td>
+      <td>{{ 'Sì' if u.must_change_password else 'No' }}</td>
+      <td class="d-flex gap-1">
+        <a href="{{ url_for('users_edit', uid=u.id if u.id is defined else u[0]) }}" class="btn btn-warning btn-sm">Modifica</a>
+        {% if not (u.is_superadmin if u.is_superadmin is defined else (u[5] if u|length>5 else False)) %}
+          <a href="{{ url_for('users_delete', uid=u.id if u.id is defined else u[0]) }}" class="btn btn-danger btn-sm">Elimina</a>
+        {% endif %}
+      </td>
     </tr>
     {% endfor %}
   </tbody>

@@ -5,7 +5,7 @@ __pycache__/
 *.sqlite3
 *.db
 database.db
-*.py~ 
+*.py~
 
 # Env
 .env
@@ -13,7 +13,7 @@ venv/
 env/
 *.venv
 
-# Uploads / media non tracciati
+# Uploads / media
 static/uploads/
 static/libretti/
 static/profiles/
@@ -24,13 +24,13 @@ static/profiles/
 .DS_Store
 thumbs.db
 
-# Docker (se non vuoi committare build/cache)
+# Docker
 docker-compose.override.yml
 *.log
 
 # Byte-compiled
 *.pyc
 
-# Distribution / build
+# Build
 dist/
 build/

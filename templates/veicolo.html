@@ -13,9 +13,26 @@
 <div class="row mb-4">
   {% for img in veicolo.immagini %}
   <div class="col-3 mb-2">
-    <img src="{{ url_for('uploads', fn=img) }}" class="img-fluid rounded">
+    <img src="{{ url_for('uploads', fn=img) }}" class="img-fluid rounded gallery-thumb" style="cursor:pointer;" data-index="{{ loop.index0 }}">
   </div>
   {% endfor %}
+</div>
+
+<!-- Modal galleria -->
+<div class="modal fade" id="galleryModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content bg-transparent border-0">
+      <div class="position-relative">
+        <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-2" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+        <div class="d-flex justify-content-center align-items-center">
+          <button id="prevImg" class="btn btn-secondary me-2" aria-label="Precedente">&larr;</button>
+          <img id="galleryImage" src="" class="img-fluid rounded" style="max-height:70vh; max-width:80%;">
+          <button id="nextImg" class="btn btn-secondary ms-2" aria-label="Successivo">&rarr;</button>
+        </div>
+        <div class="text-center text-white mt-2" id="galleryIndicator"></div>
+      </div>
+    </div>
+  </div>
 </div>
 {% endif %}
 {% if veicolo.libretto %}
@@ -28,7 +45,39 @@
         <h5 class="card-title">🛠️ Manutenzioni</h5>
         <ul class="list-group list-group-flush">
           {% for m in manut %}
-          <li class="list-group-item">{{ m[2] }} - {{ m[3] }} km</li>
+          <li class="list-group-item">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <strong>{{ m.data }}</strong> - {{ m.km }} km
+              </div>
+              <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#manu-{{ m.id }}">
+                Dettagli ▼
+              </button>
+            </div>
+            <div class="collapse mt-2" id="manu-{{ m.id }}">
+              {% if m.details %}
+              <ul class="mb-0">
+                {% for key, val in m.details.items() %}
+                  {% if key != 'olio_tipo' %}
+                    <li>
+                      <strong>{{ key.replace('_', ' ') | title }}:</strong>
+                      {% if val %}
+                        Codice: {{ val.cod if val.cod is defined else val['cod'] }}{% if (val.marca is defined) or (val['marca'] is defined) %}, Marca: {{ val.marca if val.marca is defined else val['marca'] }}{% endif %}
+                      {% else %}
+                        Spuntato senza dettagli
+                      {% endif %}
+                    </li>
+                  {% endif %}
+                {% endfor %}
+                {% if m.details.olio_tipo %}
+                  <li><strong>Tipo Olio:</strong> {{ m.details.olio_tipo }}</li>
+                {% endif %}
+              </ul>
+              {% else %}
+                <div>Nessun dettaglio salvato</div>
+              {% endif %}
+            </div>
+          </li>
           {% else %}
           <li class="list-group-item">Nessuna</li>
           {% endfor %}
@@ -51,5 +100,85 @@
     </div>
   </div>
 </div>
-<a href="/modifica_veicolo/{{ veicolo.id }}" class="btn btn-warning">✏️ Modifica</a>
+<div class="d-flex gap-2"><a href="/modifica_veicolo/{{ veicolo.id }}" class="btn btn-warning">✏️ Modifica</a><form method="post" action="/veicolo/delete/{{ veicolo.id }}" onsubmit="return confirm('Eliminare questo veicolo?');" class="mt-2 d-inline">
+  <button class="btn btn-danger">🗑️ Elimina Veicolo</button>
+</form></div>
+{% if veicolo.immagini %}
+<script>
+  const images = [
+    {% for img in veicolo.immagini %}
+      "{{ url_for('uploads', fn=img) }}"{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ];
+  let currentIndex = 0;
+  const galleryModalEl = document.getElementById('galleryModal');
+  const galleryModal = new bootstrap.Modal(galleryModalEl);
+  const galleryImage = document.getElementById('galleryImage');
+
+  function showImage(idx) {
+    currentIndex = (idx + images.length) % images.length;
+    galleryImage.src = images[currentIndex];
+  }
+
+  document.querySelectorAll('.gallery-thumb').forEach(el => {
+    el.addEventListener('click', () => {
+      showImage(parseInt(el.dataset.index));
+      galleryModal.show();
+    });
+  });
+
+  document.getElementById('prevImg').addEventListener('click', () => {
+    showImage(currentIndex - 1);
+  });
+  document.getElementById('nextImg').addEventListener('click', () => {
+    showImage(currentIndex + 1);
+  });
+</script>
+{% endif %}
+{% if veicolo.immagini %}
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const images = [
+      {% for img in veicolo.immagini %}
+        "{{ url_for('uploads', fn=img) }}"{% if not loop.last %},{% endif %}
+      {% endfor %}
+    ];
+    let currentIndex = 0;
+    const galleryModalEl = document.getElementById('galleryModal');
+    const galleryImage = document.getElementById('galleryImage');
+    const indicator = document.getElementById('galleryIndicator');
+    const bsModal = new bootstrap.Modal(galleryModalEl);
+
+    function updateIndicator() {
+      indicator.textContent = (currentIndex+1) + " / " + images.length;
+    }
+
+    function showImage(idx) {
+      currentIndex = (idx + images.length) % images.length;
+      galleryImage.src = images[currentIndex];
+      updateIndicator();
+    }
+
+    document.querySelectorAll('.gallery-thumb').forEach(el => {
+      el.addEventListener('click', () => {
+        showImage(parseInt(el.dataset.index));
+        bsModal.show();
+      });
+      el.style.cursor = 'pointer';
+    });
+    document.getElementById('prevImg').addEventListener('click', () => {
+      showImage(currentIndex - 1);
+    });
+    document.getElementById('nextImg').addEventListener('click', () => {
+      showImage(currentIndex + 1);
+    });
+    // arrow keys
+    document.addEventListener('keydown', (e) => {
+      if (!galleryModalEl.classList.contains('show')) return;
+      if (e.key === 'ArrowRight') showImage(currentIndex + 1);
+      if (e.key === 'ArrowLeft') showImage(currentIndex - 1);
+    });
+  });
+</script>
+{% endif %}
 {% endblock %}

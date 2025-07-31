@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>✏️ Modifica Utente</h2>
+<form method="post" enctype="multipart/form-data">
+  <div class="mb-3"><label>Username</label><input name="username" class="form-control" value="{{ user.username }}"></div>
+  <div class="mb-3"><label>Nuova password (lascia vuoto per non cambiare)</label><input name="password" type="password" class="form-control"></div>
+  <div class="mb-3"><label>Immagine profilo</label><input type="file" name="profile_img" class="form-control"></div>
+  <div class="form-check mb-2">
+    <input class="form-check-input" type="checkbox" name="is_admin" id="adm" {% if user.is_admin %}checked{% endif %}>
+    <label class="form-check-label" for="adm">Admin</label>
+  </div>
+  <div class="form-check mb-2">
+    <input class="form-check-input" type="checkbox" name="force_change" id="fc" {% if user.must_change_password %}checked{% endif %}>
+    <label class="form-check-label" for="fc">Forza cambio password</label>
+  </div>
+  {% if user.is_superadmin %}
+    <div class="alert alert-info">Questo è l'admin principale: non puoi rimuovere i permessi admin.</div>
+  {% endif %}
+  <button class="btn btn-success">Salva</button>
+</form>
+{% endblock %}

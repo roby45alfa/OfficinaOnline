@@ -22,7 +22,10 @@
         <a href="/veicolo/{{ v.id if v.id is defined else v[0] }}" class="btn btn-info btn-sm">Dettagli</a>
         <a href="/manutenzione/{{ v.id if v.id is defined else v[0] }}" class="btn btn-secondary btn-sm">Man. Ord.</a>
         <a href="/scadenze/{{ v.id if v.id is defined else v[0] }}" class="btn btn-secondary btn-sm">Scadenze</a>
-      </td>
+      
+        <form method="post" action="/veicolo/delete/{{ v.id if v.id is defined else v[0] }}" style="display:inline;" onsubmit="return confirm('Eliminare il veicolo?');">
+          <button class="btn btn-danger btn-sm" type="submit">🗑️</button>
+        </form></td>
     </tr>
     {% else %}
     <tr><td colspan="8" class="text-center">Nessun veicolo presente.</td></tr>

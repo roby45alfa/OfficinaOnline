@@ -17,14 +17,9 @@ def init_db():
         password TEXT,
         profile_img TEXT,
         is_admin INTEGER,
-        must_change_password INTEGER DEFAULT 1
+        must_change_password INTEGER DEFAULT 1,
+        is_superadmin INTEGER DEFAULT 0
     )""")
-    # default admin, password 'admin', force change
-    c.execute("SELECT * FROM users WHERE username='admin'")
-    if not c.fetchone():
-        hashed=generate_password_hash('admin')
-        c.execute("INSERT INTO users (username,password,profile_img,is_admin,must_change_password) VALUES (?,?,?,?,?)",
-                  ('admin', hashed, None, 1, 1))
     c.execute("""CREATE TABLE IF NOT EXISTS veicoli (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         owner_id INTEGER,
@@ -45,6 +40,12 @@ def init_db():
         tipo TEXT, data TEXT,
         FOREIGN KEY(veicolo_id) REFERENCES veicoli(id)
     )""")
+    # default superadmin
+    c.execute("SELECT * FROM users WHERE username='admin'")
+    if not c.fetchone():
+        hashed=generate_password_hash('admin')
+        c.execute("""INSERT INTO users (username,password,profile_img,is_admin,must_change_password,is_superadmin)
+                     VALUES (?,?,?,?,?,?)""", ('admin', hashed, None, 1, 1, 1))
     conn.commit()
     conn.close()
 
@@ -54,20 +55,50 @@ def get_user_by_username(username):
     c.execute("SELECT * FROM users WHERE username=?", (username,))
     u=c.fetchone(); conn.close(); return u
 
+def get_user_by_id(uid):
+    conn=get_db(); c=conn.cursor()
+    c.execute("SELECT * FROM users WHERE id=?", (uid,))
+    u=c.fetchone(); conn.close(); return u
+
 def get_users():
     conn=get_db(); c=conn.cursor()
-    c.execute("SELECT id, username, profile_img, is_admin, must_change_password FROM users")
+    c.execute("SELECT id, username, profile_img, is_admin, must_change_password, is_superadmin FROM users")
     rows=c.fetchall(); conn.close(); return rows
 
 def add_user(username, password_hash, profile_img, is_admin, must_change_password=1):
     conn=get_db(); c=conn.cursor()
-    c.execute("INSERT INTO users (username, password, profile_img, is_admin, must_change_password) VALUES (?,?,?,?,?)",
-              (username, password_hash, profile_img, is_admin, must_change_password))
+    c.execute("""INSERT INTO users (username, password, profile_img, is_admin, must_change_password)
+                 VALUES (?,?,?,?,?)""", (username, password_hash, profile_img, is_admin, must_change_password))
     conn.commit(); conn.close()
 
 def delete_user(uid):
     conn=get_db(); c=conn.cursor()
+    c.execute("SELECT is_superadmin FROM users WHERE id=?", (uid,))
+    row=c.fetchone()
+    if row and row['is_superadmin']:
+        conn.close()
+        return
     c.execute("DELETE FROM users WHERE id=?", (uid,))
+    conn.commit(); conn.close()
+
+def aggiorna_utente(uid, username=None, password_hash=None, profile_img=None, is_admin=None, must_change_password=None):
+    conn=get_db(); c=conn.cursor()
+    updates=[]
+    params=[]
+    if username is not None:
+        updates.append("username=?"); params.append(username)
+    if password_hash is not None:
+        updates.append("password=?"); params.append(password_hash)
+    if profile_img is not None:
+        updates.append("profile_img=?"); params.append(profile_img)
+    if is_admin is not None:
+        updates.append("is_admin=?"); params.append(is_admin)
+    if must_change_password is not None:
+        updates.append("must_change_password=?"); params.append(must_change_password)
+    if not updates:
+        conn.close(); return
+    params.append(uid)
+    c.execute(f"UPDATE users SET {', '.join(updates)} WHERE id=?", tuple(params))
     conn.commit(); conn.close()
 
 def set_password(username, password_hash):
@@ -100,21 +131,18 @@ def get_veicolo_by_id(vid, user_id=None, is_admin=False):
 def aggiungi_veicolo(owner_id, nome, cognome, targa, marca, modello, anno, km, imgs, lib):
     conn=get_db(); c=conn.cursor()
     c.execute("""INSERT INTO veicoli (owner_id,nome,cognome,targa,marca,modello,anno,km,immagini,libretto)
-                 VALUES (?,?,?,?,?,?,?,?,?,?)""",
-              (owner_id, nome, cognome, targa, marca, modello, anno, km, json.dumps(imgs), lib))
+                 VALUES (?,?,?,?,?,?,?,?,?,?)""", (owner_id, nome, cognome, targa, marca, modello, anno, km, json.dumps(imgs), lib))
     conn.commit(); conn.close()
 
 def aggiorna_veicolo(vid, nome, cognome, targa, marca, modello, anno, km, imgs, lib):
     conn=get_db(); c=conn.cursor()
     c.execute("""UPDATE veicoli SET nome=?,cognome=?,targa=?,marca=?,modello=?,anno=?,km=?,immagini=?,libretto=?
-                 WHERE id=?""",
-              (nome, cognome, targa, marca, modello, anno, km, json.dumps(imgs), lib, vid))
+                 WHERE id=?""", (nome, cognome, targa, marca, modello, anno, km, json.dumps(imgs), lib, vid))
     conn.commit(); conn.close()
 
 def aggiungi_manutenzione(vid, data, km, details):
     conn=get_db(); c=conn.cursor()
-    c.execute("INSERT INTO manutenzioni (veicolo_id,data,km,details) VALUES (?,?,?,?)",
-              (vid, data, km, json.dumps(details)))
+    c.execute("INSERT INTO manutenzioni (veicolo_id,data,km,details) VALUES (?,?,?,?)", (vid, data, km, json.dumps(details)))
     conn.commit(); conn.close()
 
 def get_manutenzioni(vid):
@@ -131,3 +159,9 @@ def get_scadenze(vid):
     conn=get_db(); c=conn.cursor()
     c.execute("SELECT * FROM scadenze WHERE veicolo_id=? ORDER BY data ASC", (vid,))
     rows=c.fetchall(); conn.close(); return rows
+
+
+def elimina_veicolo(vid):
+    conn=get_db(); c=conn.cursor()
+    c.execute("DELETE FROM veicoli WHERE id=?", (vid,))
+    conn.commit(); conn.close()
