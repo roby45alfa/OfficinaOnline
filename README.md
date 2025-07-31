@@ -67,16 +67,7 @@ Apri `http://localhost:5000`.
 - `/users/delete/<id>` - elimina utente  
 - `/veicolo/delete/<id>` - elimina veicolo (POST)  
 
-## Git
 
-```bash
-git init
-git add .
-git commit -m "feat: setup gestionale veicoli con utenti, manutenzioni e galleria"
-git branch -M main
-git remote add origin <tuo-repo>
-git push -u origin main
-```
 
 ## Note
 
