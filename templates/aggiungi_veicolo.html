@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>➕ Aggiungi Veicolo</h2>
+<form method="post" enctype="multipart/form-data">
+  <div class="row g-3">
+    <div class="col-md-6"><label class="form-label">Nome</label><input name="nome" class="form-control" required></div>
+    <div class="col-md-6"><label class="form-label">Cognome</label><input name="cognome" class="form-control" required></div>
+  </div>
+  <div class="mb-3"><label class="form-label">Targa</label><input name="targa" class="form-control" required></div>
+  <div class="row g-3">
+    <div class="col-md-4"><label class="form-label">Marca</label><input name="marca" class="form-control"></div>
+    <div class="col-md-4"><label class="form-label">Modello</label><input name="modello" class="form-control"></div>
+    <div class="col-md-2"><label class="form-label">Anno</label><input name="anno" type="number" class="form-control"></div>
+    <div class="col-md-2"><label class="form-label">KM</label><input name="km" type="number" class="form-control"></div>
+  </div>
+  <div class="mb-3"><label class="form-label">Foto</label><input type="file" name="immagini" multiple class="form-control"></div>
+  <div class="mb-3"><label class="form-label">Libretto (PDF)</label><input type="file" name="libretto" class="form-control"></div>
+  <button class="btn btn-success mt-3">Salva</button>
+</form>
+{% endblock %}

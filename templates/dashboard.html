@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>📊 Dashboard</h2>
+<div class="row mb-3">
+  <div class="col"><div class="card p-3 text-center">Veicoli: {{ veicoli|length }}</div></div>
+  <div class="col"><div class="card p-3 text-center">Ultime manutenzioni: {{ last_m|length }}</div></div>
+  <div class="col"><div class="card p-3 text-center">Scadenze: {{ due_s|length }}</div></div>
+</div>
+<div class="row">
+  <div class="col-md-6">
+    <h5>🛠 Ultime manutenzioni</h5>
+    <ul>
+      {% for m in last_m %}
+        <li>#{{ m.veicolo_id }} - {{ m.data }} @{{ m.km }}km</li>
+      {% else %}
+        <li>Nessuna manutenzione</li>
+      {% endfor %}
+    </ul>
+  </div>
+  <div class="col-md-6">
+    <h5>⏰ Scadenze imminenti</h5>
+    <ul>
+      {% for s in due_s %}
+        <li>#{{ s.veicolo_id }} - {{ s.tipo }} il {{ s.data }}</li>
+      {% else %}
+        <li>Nessuna scadenza</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+{% endblock %}

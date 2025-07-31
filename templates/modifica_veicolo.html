@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>✏️ Modifica Veicolo</h2>
+<form method="post" enctype="multipart/form-data">
+  <div class="mb-3"><label>Nome</label><input name="nome" class="form-control" value="{{ veicolo.nome }}"></div>
+  <div class="mb-3"><label>Cognome</label><input name="cognome" class="form-control" value="{{ veicolo.cognome }}"></div>
+  <div class="mb-3"><label>Targa</label><input name="targa" class="form-control" value="{{ veicolo.targa }}"></div>
+  <div class="mb-3"><label>Marca</label><input name="marca" class="form-control" value="{{ veicolo.marca }}"></div>
+  <div class="mb-3"><label>Modello</label><input name="modello" class="form-control" value="{{ veicolo.modello }}"></div>
+  <div class="mb-3"><label>Anno</label><input name="anno" type="number" class="form-control" value="{{ veicolo.anno }}"></div>
+  <div class="mb-3"><label>KM</label><input name="km" type="number" class="form-control" value="{{ veicolo.km }}"></div>
+  <div class="mb-3"><label>Nuove Foto</label><input type="file" name="immagini" multiple class="form-control"></div>
+  <div class="mb-3"><label>Nuovo Libretto</label><input type="file" name="libretto" class="form-control"></div>
+  <button class="btn btn-success">Salva</button>
+</form>
+{% endblock %}

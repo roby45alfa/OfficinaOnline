@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>➕ Aggiungi Utente</h2>
+<form method="post" enctype="multipart/form-data">
+  <div class="mb-3"><input name="username" class="form-control" placeholder="Username" required></div>
+  <div class="mb-3"><input name="password" type="password" class="form-control" placeholder="Password" required></div>
+  <div class="mb-3"><label>Foto profilo</label><input type="file" name="profile_img" class="form-control"></div>
+  <div class="form-check mb-3"><input type="checkbox" name="is_admin" class="form-check-input" id="adm"><label for="adm" class="form-check-label">Admin</label></div>
+  <button class="btn btn-success">Salva</button>
+</form>
+{% endblock %}

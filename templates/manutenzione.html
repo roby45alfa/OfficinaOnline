@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>🛠 Manutenzione Ordinaria</h2>
+<form method="post">
+  <div class="mb-3"><label>Data</label><input name="data" type="date" class="form-control" required></div>
+  <div class="mb-3"><label>KM</label><input name="km_man" type="number" class="form-control" required></div>
+  {% for f,label in [('filtro_olio','Filtro Olio'),('filtro_gasolio','Filtro Gasolio'),('filtro_aria','Filtro Aria'),('filtro_abitacolo','Filtro Aria Abitacolo'),('olio','Olio'),('past_ant','Pastiglie Anteriori'),('past_post','Pastiglie Posteriori'),('dischi_ant','Dischi Anteriori'),('dischi_post','Dischi Posteriori')] %}
+  <div class="form-check"><input class="form-check-input" type="checkbox" name="{{ f }}" id="{{ f }}"><label class="form-check-label" for="{{ f }}">{{ label }}</label></div>
+  <div class="row g-2 mb-3">
+    <div class="col"><input name="cod_{{ f }}" placeholder="Codice" class="form-control"></div>
+    <div class="col"><input name="mar_{{ f }}" placeholder="Marca" class="form-control"></div>
+  </div>
+  {% endfor %}
+  <div class="mb-3"><label>Tipo Olio</label><input name="olio_tipo" class="form-control"></div>
+  <button class="btn btn-success">Salva Manutenzione</button>
+</form>
+{% endblock %}

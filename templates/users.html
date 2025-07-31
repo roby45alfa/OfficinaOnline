@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>👥 Gestione Utenti</h2>
+<a href="{{ url_for('users_add') }}" class="btn btn-primary mb-3">➕ Aggiungi Utente</a>
+<table class="table">
+  <thead><tr><th>ID</th><th>Username</th><th>Admin</th><th>Forza cambio</th><th>Azioni</th></tr></thead>
+  <tbody>
+    {% for u in users %}
+    <tr>
+      <td>{{ u[0] }}</td>
+      <td>{{ u[1] }}</td>
+      <td>{{ 'Sì' if u[3] else 'No' }}</td>
+      <td>{{ 'Sì' if u[4] else 'No' }}</td>
+      <td><a href="{{ url_for('users_delete', uid=u[0]) }}" class="btn btn-danger btn-sm">Elimina</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

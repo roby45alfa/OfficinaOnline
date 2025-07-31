@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.sqlite3
+*.db
+database.db
+*.py~ 
+
+# Env
+.env
+venv/
+env/
+*.venv
+
+# Uploads / media non tracciati
+static/uploads/
+static/libretti/
+static/profiles/
+
+# IDE / OS
+.vscode/
+*.swp
+.DS_Store
+thumbs.db
+
+# Docker (se non vuoi committare build/cache)
+docker-compose.override.yml
+*.log
+
+# Byte-compiled
+*.pyc
+
+# Distribution / build
+dist/
+build/

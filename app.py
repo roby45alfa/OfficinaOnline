@@ -1,0 +1,218 @@
+from flask import Flask, render_template, request, redirect, session, url_for, send_from_directory, abort
+import os, json
+from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
+from db import (init_db, get_user_by_username, get_users, add_user, delete_user, set_password,
+                get_veicoli, get_veicolo_by_id, aggiungi_veicolo, aggiorna_veicolo,
+                aggiungi_manutenzione, get_manutenzioni, aggiungi_scadenza, get_scadenze)
+
+app = Flask(__name__)
+app.secret_key='finalsecret'
+UPLOAD_FOLDER='static/uploads'
+PDF_FOLDER='static/libretti'
+PROFILE_FOLDER='static/profiles'
+for d in (UPLOAD_FOLDER, PDF_FOLDER, PROFILE_FOLDER):
+    os.makedirs(d, exist_ok=True)
+
+@app.before_request
+def load_user():
+    username=session.get('username')
+    if username:
+        user=get_user_by_username(username)
+        if not user:
+            session.clear()
+        else:
+            session['is_admin']=user['is_admin']
+            session['profile_img']=user['profile_img']
+            session['user_id']=user['id']
+            session['must_change']=user['must_change_password']
+
+@app.context_processor
+def inject_user():
+    return dict(logged_user=session.get('username'), profile_img=session.get('profile_img'))
+
+def require_login():
+    if not session.get('username'):
+        return redirect(url_for('login'))
+
+def require_admin():
+    return session.get('is_admin')
+
+@app.route('/', methods=['GET','POST'])
+def login():
+    error=False
+    if request.method=='POST':
+        user=get_user_by_username(request.form.get('username',''))
+        if user:
+            pw=request.form.get('password','')
+            if check_password_hash(user['password'], pw):
+                session['username']=user['username']
+                # force password change
+                if user['must_change_password']:
+                    return redirect(url_for('change_password'))
+                return redirect(url_for('dashboard'))
+        error=True
+    return render_template('login.html', error=error)
+
+@app.route('/change_password', methods=['GET','POST'])
+def change_password():
+    if not session.get('username'):
+        return redirect(url_for('login'))
+    if request.method=='POST':
+        new_pw=request.form.get('password','').strip()
+        if not new_pw:
+            return render_template('change_password.html', error='Serve una password')
+        hashed=generate_password_hash(new_pw)
+        set_password(session['username'], hashed)
+        return redirect(url_for('dashboard'))
+    return render_template('change_password.html')
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+@app.route('/dashboard')
+def dashboard():
+    if not session.get('username'):
+        return redirect(url_for('login'))
+    is_admin = session.get('is_admin')
+    user_id = session.get('user_id')
+    veicoli = get_veicoli(user_id, is_admin=is_admin)
+    last_m=[]
+    due_s=[]
+    for v in veicoli:
+        for m in get_manutenzioni(v['id'] if isinstance(v, dict) else v[0]):
+            last_m.append({'veicolo_id': v['id'] if isinstance(v, dict) else v[0],'data': m[2],'km': m[3]})
+        for s in get_scadenze(v['id'] if isinstance(v, dict) else v[0]):
+            due_s.append({'veicolo_id': v['id'] if isinstance(v, dict) else v[0],'tipo': s[2],'data': s[3]})
+    return render_template('dashboard.html', veicoli=veicoli, last_m=last_m, due_s=due_s)
+
+@app.route('/veicoli')
+def veicoli():
+    if not session.get('username'):
+        return redirect(url_for('login'))
+    is_admin = session.get('is_admin')
+    user_id = session.get('user_id')
+    return render_template('veicoli.html', veicoli=get_veicoli(user_id, is_admin=is_admin))
+
+@app.route('/aggiungi_veicolo', methods=['GET','POST'])
+def aggiungi_veicolo_route():
+    if not session.get('username'):
+        return redirect(url_for('login'))
+    if request.method=='POST':
+        data=request.form
+        imgs=[]
+        for f in request.files.getlist('immagini'):
+            if f and f.filename:
+                fn=secure_filename(f.filename); f.save(os.path.join(UPLOAD_FOLDER,fn)); imgs.append(fn)
+        lib=None
+        lf=request.files.get('libretto')
+        if lf and lf.filename:
+            fn=secure_filename(lf.filename); lf.save(os.path.join(PDF_FOLDER,fn)); lib=fn
+        owner_id=session.get('user_id')
+        aggiungi_veicolo(owner_id, data.get('nome'), data.get('cognome'), data.get('targa'),
+                         data.get('marca'), data.get('modello'), data.get('anno'),
+                         data.get('km'), imgs, lib)
+        return redirect(url_for('veicoli'))
+    return render_template('aggiungi_veicolo.html')
+
+@app.route('/veicolo/<int:vid>')
+def dettaglio_veicolo(vid):
+    if not session.get('username'):
+        return redirect(url_for('login'))
+    is_admin=session.get('is_admin')
+    user_id=session.get('user_id')
+    v=get_veicolo_by_id(vid, user_id, is_admin=is_admin)
+    if not v:
+        abort(404)
+    manut=get_manutenzioni(vid); scans=get_scadenze(vid)
+    return render_template('veicolo.html', veicolo=v, manut=manut, scans=scans)
+
+@app.route('/modifica_veicolo/<int:vid>', methods=['GET','POST'])
+def mod_v(vid):
+    if not session.get('username'):
+        return redirect(url_for('login'))
+    is_admin=session.get('is_admin'); user_id=session.get('user_id')
+    ve=get_veicolo_by_id(vid, user_id, is_admin=is_admin)
+    if not ve:
+        abort(404)
+    if request.method=='POST':
+        data=request.form; imgs=ve.get('immagini',[])[:]
+        for f in request.files.getlist('immagini'):
+            if f and f.filename:
+                fn=secure_filename(f.filename); f.save(os.path.join(UPLOAD_FOLDER,fn)); imgs.append(fn)
+        lib=ve.get('libretto'); lf=request.files.get('libretto')
+        if lf and lf.filename:
+            fn=secure_filename(lf.filename); lf.save(os.path.join(PDF_FOLDER,fn)); lib=fn
+        aggiorna_veicolo(vid, data.get('nome'), data.get('cognome'), data.get('targa'),
+                         data.get('marca'), data.get('modello'), data.get('anno'),
+                         data.get('km'), imgs, lib)
+        return redirect(url_for('dettaglio_veicolo', vid=vid))
+    return render_template('modifica_veicolo.html', veicolo=ve)
+
+@app.route('/manutenzione/<int:vid>', methods=['GET','POST'])
+def manutenzione(vid):
+    if not session.get('username'):
+        return redirect(url_for('login'))
+    if request.method=='POST':
+        data=request.form; details={}
+        fields=['filtro_olio','filtro_gasolio','filtro_aria','filtro_abitacolo','olio','past_ant','past_post','dischi_ant','dischi_post']
+        for f in fields:
+            if data.get(f):
+                details[f]={'cod':data.get(f'cod_{f}'),'marca':data.get(f'mar_{f}')}
+        details['olio_tipo']=data.get('olio_tipo')
+        aggiungi_manutenzione(vid, data.get('data'), data.get('km_man'), details)
+        return redirect(url_for('dettaglio_veicolo', vid=vid))
+    ve=get_veicolo_by_id(vid, session.get('user_id'), is_admin=session.get('is_admin'))
+    return render_template('manutenzione.html', veicolo=ve)
+
+@app.route('/scadenze/<int:vid>', methods=['GET','POST'])
+def scadenze(vid):
+    if not session.get('username'):
+        return redirect(url_for('login'))
+    if request.method=='POST':
+        aggiungi_scadenza(vid, request.form.get('tipo'), request.form.get('data_sc'))
+        return redirect(url_for('dettaglio_veicolo', vid=vid))
+    ve=get_veicolo_by_id(vid, session.get('user_id'), is_admin=session.get('is_admin'))
+    sc=get_scadenze(vid)
+    return render_template('scadenze.html', veicolo=ve, scadenze=sc)
+
+@app.route('/users')
+def users():
+    if not session.get('username') or not session.get('is_admin'):
+        return redirect(url_for('login'))
+    return render_template('users.html', users=get_users())
+
+@app.route('/users/add', methods=['GET','POST'])
+def users_add():
+    if not session.get('username') or not session.get('is_admin'):
+        return redirect(url_for('login'))
+    if request.method=='POST':
+        uname=request.form.get('username')
+        pwd=request.form.get('password')
+        is_admin=1 if request.form.get('is_admin') else 0
+        img=None
+        f=request.files.get('profile_img')
+        if f and f.filename:
+            fn=secure_filename(f.filename); f.save(os.path.join(PROFILE_FOLDER,fn)); img=fn
+        hashed=generate_password_hash(pwd)
+        add_user(uname, hashed, img, is_admin, 1)  # force password change
+        return redirect(url_for('users'))
+    return render_template('add_user.html')
+
+@app.route('/users/delete/<int:uid>')
+def users_delete(uid):
+    if not session.get('username') or not session.get('is_admin'):
+        return redirect(url_for('login'))
+    delete_user(uid)
+    return redirect(url_for('users'))
+
+@app.route('/uploads/<path:fn>')
+def uploads(fn): return send_from_directory(UPLOAD_FOLDER, fn)
+@app.route('/libretti/<path:fn>')
+def download_libretto(fn): return send_from_directory(PDF_FOLDER, fn, as_attachment=True)
+
+if __name__=='__main__':
+    init_db()
+    app.run(debug=True, host='0.0.0.0', port=5000)

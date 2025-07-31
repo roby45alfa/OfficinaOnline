@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>⏰ Scadenze</h2>
+<form method="post">
+  <div class="row g-3 mb-3">
+    <div class="col-md-6">
+      <label>Tipo</label>
+      <select name="tipo" class="form-select" required>
+        <option value="">-- Seleziona --</option>
+        <option value="Bollo">Bollo</option>
+        <option value="Assicurazione">Assicurazione</option>
+        <option value="Revisione">Revisione</option>
+      </select>
+    </div>
+    <div class="col-md-6">
+      <label>Data</label>
+      <input name="data_sc" type="date" class="form-control" required>
+    </div>
+  </div>
+  <button class="btn btn-success">Salva Scadenza</button>
+</form>
+{% endblock %}

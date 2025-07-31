@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card mb-4">
+  <div class="card-body">
+    <h3 class="card-title">📋 Dettagli Veicolo</h3>
+    <p class="fs-5"><strong>Proprietario:</strong> {{ veicolo.nome }} {{ veicolo.cognome }}</p>
+    <p class="fs-5"><strong>Targa:</strong> {{ veicolo.targa | upper }}</p>
+    <p class="fs-5"><strong>Marca/Modello:</strong> {{ veicolo.marca }} {{ veicolo.modello }}</p>
+    <p class="fs-5"><strong>Anno:</strong> {{ veicolo.anno }} | <strong>KM:</strong> {{ veicolo.km }}</p>
+  </div>
+</div>
+{% if veicolo.immagini %}
+<div class="row mb-4">
+  {% for img in veicolo.immagini %}
+  <div class="col-3 mb-2">
+    <img src="{{ url_for('uploads', fn=img) }}" class="img-fluid rounded">
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% if veicolo.libretto %}
+<p><a href="/libretti/{{ veicolo.libretto }}" class="btn btn-outline-primary">📄 Scarica Libretto</a></p>
+{% endif %}
+<div class="row">
+  <div class="col-md-6">
+    <div class="card mb-3">
+      <div class="card-body">
+        <h5 class="card-title">🛠️ Manutenzioni</h5>
+        <ul class="list-group list-group-flush">
+          {% for m in manut %}
+          <li class="list-group-item">{{ m[2] }} - {{ m[3] }} km</li>
+          {% else %}
+          <li class="list-group-item">Nessuna</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card mb-3">
+      <div class="card-body">
+        <h5 class="card-title">⏰ Scadenze</h5>
+        <ul class="list-group list-group-flush">
+          {% for s in scans %}
+          <li>{{ s[2] }}: {{ s[3] }}</li>
+          {% else %}
+          <li class="list-group-item">Nessuna</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+<a href="/modifica_veicolo/{{ veicolo.id }}" class="btn btn-warning">✏️ Modifica</a>
+{% endblock %}
