@@ -2,29 +2,54 @@
 <html lang="it">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Gestionale Veicoli</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    /* ensure tables scroll on small screens */
+    .table-responsive {overflow-x: auto;}
+    /* improve vehicle details visibility */
+    .vehicle-info {font-size: 1.1rem; line-height:1.3;}
+    /* prevent auto scroll of galleries maybe */
+    .gallery img {cursor: pointer;}
+  </style>
 </head>
 <body class="bg-light">
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+<nav class="navbar navbar-dark bg-dark">
   <div class="container-fluid">
+    <button class="btn btn-dark d-lg-none me-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasMenu" aria-label="Apri menu">
+      ☰
+    </button>
     <a class="navbar-brand" href="/dashboard">🚗 Gestionale</a>
-    <div class="collapse navbar-collapse">
-      <ul class="navbar-nav me-auto">
-        <li class="nav-item"><a class="nav-link" href="/dashboard">Dashboard</a></li>
-        <li class="nav-item"><a class="nav-link" href="/veicoli">Veicoli</a></li>
-        <li class="nav-item"><a class="nav-link" href="/users">Utenti</a></li>
+    <div class="d-none d-lg-flex ms-3">
+      <ul class="navbar-nav me-auto flex-row">
+        <li class="nav-item me-3"><a class="nav-link text-white" href="/dashboard">Dashboard</a></li>
+        <li class="nav-item me-3"><a class="nav-link text-white" href="/veicoli">Veicoli</a></li>
+        <li class="nav-item me-3"><a class="nav-link text-white" href="/users">Utenti</a></li>
       </ul>
-      <div class="d-flex align-items-center">
-        {% if profile_img %}
-          <img src="{{ url_for('static', filename='profiles/'~profile_img) }}" width="36" class="rounded-circle me-2">
-        {% endif %}
-        <span class="text-white me-3">{{ logged_user }}</span>
-        <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>
-      </div>
+    </div>
+    <div class="d-flex align-items-center ms-auto">
+      {% if profile_img %}
+        <img src="{{ url_for('static', filename='profiles/'~profile_img) }}" width="36" class="rounded-circle me-2">
+      {% endif %}
+      <span class="text-white me-3">{{ logged_user }}</span>
+      <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>
     </div>
   </div>
 </nav>
+<div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasMenu">
+  <div class="offcanvas-header">
+    <h5 class="offcanvas-title">Menu</h5>
+    <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Chiudi"></button>
+  </div>
+  <div class="offcanvas-body">
+    <ul class="nav flex-column">
+      <li class="nav-item mb-2"><a class="nav-link" href="/dashboard">Dashboard</a></li>
+      <li class="nav-item mb-2"><a class="nav-link" href="/veicoli">Veicoli</a></li>
+      <li class="nav-item mb-2"><a class="nav-link" href="/users">Utenti</a></li>
+    </ul>
+  </div>
+</div>
 <div class="container my-4">{% block content %}{% endblock %}</div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body></html>

@@ -4,7 +4,7 @@
   <h2 class="fw-bold">🚗 Veicoli</h2>
   <a href="/aggiungi_veicolo" class="btn btn-success">➕ Aggiungi Veicolo</a>
 </div>
-<table class="table table-striped table-hover">
+<div class="table-responsive"><table class="table table-striped table-hover">
   <thead class="table-dark"><tr>
     <th>ID</th><th>Proprietario</th><th>Targa</th><th>Marca</th><th>Modello</th><th>Anno</th><th>KM</th><th>Azioni</th>
   </tr></thead>
@@ -31,5 +31,5 @@
     <tr><td colspan="8" class="text-center">Nessun veicolo presente.</td></tr>
     {% endfor %}
   </tbody>
-</table>
+</table></div>
 {% endblock %}
