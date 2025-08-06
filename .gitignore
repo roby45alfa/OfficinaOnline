@@ -1,3 +1,6 @@
+# File: .gitignore
+# Ignore patterns for the officina project.
+
 # Python
 __pycache__/
 *.py[cod]

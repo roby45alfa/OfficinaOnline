@@ -1,9 +1,15 @@
+# File: docker-compose.yml
+# Docker configuration for the officina project.
+
 version: '3.9'
 services:
-  gestionale:
+  officina:
     build: .
+    container_name: officina
+    restart: unless-stopped
     ports:
       - "5000:5000"
+    environment:
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
     volumes:
       - .:/app
-    restart: unless-stopped

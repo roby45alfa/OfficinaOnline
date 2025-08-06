@@ -1,4 +1,18 @@
+<!--
+File: modifica_veicolo.html
+Template Jinja2 per l'app Officina.
+Spiega sezioni e blocchi del template.
+-->
+
+<!--
+File: modifica_veicolo.html
+HTML/Jinja2 template for the officina project.
+Add section comments as needed.
+-->
+
+<!-- Estende il layout base -->
 {% extends 'base.html' %}
+<!-- Inizio del blocco content: qui viene inserito il contenuto della pagina -->
 {% block content %}
 <h2>✏️ Modifica Veicolo</h2>
 <form method="post" enctype="multipart/form-data">
@@ -13,4 +27,4 @@
   <div class="mb-3"><label>Nuovo Libretto</label><input type="file" name="libretto" class="form-control"></div>
   <button class="btn btn-success">Salva</button>
 </form>
-{% endblock %}
+{% endblock %}<!-- Fine del blocco content -->

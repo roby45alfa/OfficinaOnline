@@ -1,4 +1,18 @@
+<!--
+File: veicoli.html
+Template Jinja2 per l'app Officina.
+Spiega sezioni e blocchi del template.
+-->
+
+<!--
+File: veicoli.html
+HTML/Jinja2 template for the officina project.
+Add section comments as needed.
+-->
+
+<!-- Estende il layout base -->
 {% extends 'base.html' %}
+<!-- Inizio del blocco content: qui viene inserito il contenuto della pagina -->
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
   <h2 class="fw-bold">🚗 Veicoli</h2>
@@ -32,4 +46,4 @@
     {% endfor %}
   </tbody>
 </table></div>
-{% endblock %}
+{% endblock %}<!-- Fine del blocco content -->

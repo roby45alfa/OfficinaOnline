@@ -1,3 +1,8 @@
+<!--
+File: README.md
+Markdown documentation for the officina project.
+-->
+
 # Gestionale Veicoli con Utenti e Superadmin
 
 Sistema in Flask + SQLite per gestire veicoli, manutenzioni, scadenze e utenti con isolamento dati. Pensato per essere eseguito via Docker (es. su Raspberry OS) o in locale.
