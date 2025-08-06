@@ -87,7 +87,7 @@ Ogni utente (standard o admin) può gestire i propri veicoli, registrare manuten
 
 1. **Clona il repository**  
    ```bash
-   git clone https://github.com/<tuo-username>/officina.git
+   git clone https://github.com/roby45alfa/OfficinaOnline.git
    cd officina
    ```
 
