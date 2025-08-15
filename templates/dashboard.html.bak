@@ -1,0 +1,45 @@
+<!--
+File: dashboard.html
+Template Jinja2 per l'app Officina.
+Spiega sezioni e blocchi del template.
+-->
+
+<!--
+File: dashboard.html
+HTML/Jinja2 template for the officina project.
+Add section comments as needed.
+-->
+
+<!-- Estende il layout base -->
+{% extends 'base.html' %}
+<!-- Inizio del blocco content: qui viene inserito il contenuto della pagina -->
+{% block content %}
+<h2>📊 Dashboard</h2>
+<div class="row mb-3">
+  <div class="col"><div class="card p-3 text-center">Veicoli: {{ veicoli|length }}</div></div>
+  <div class="col"><div class="card p-3 text-center">Ultime manutenzioni: {{ last_m|length }}</div></div>
+  <div class="col"><div class="card p-3 text-center">Scadenze: {{ due_s|length }}</div></div>
+</div>
+<div class="row">
+  <div class="col-md-6">
+    <h5>🛠 Ultime manutenzioni</h5>
+    <ul>
+      {% for m in last_m %}
+        <li>#{{ m.veicolo_id }} - {{ m.data }} @{{ m.km }}km</li>
+      {% else %}
+        <li>Nessuna manutenzione</li>
+      {% endfor %}
+    </ul>
+  </div>
+  <div class="col-md-6">
+    <h5>⏰ Scadenze imminenti</h5>
+    <ul>
+      {% for s in due_s %}
+        <li>#{{ s.veicolo_id }} - {{ s.tipo }} il {{ s.data }}</li>
+      {% else %}
+        <li>Nessuna scadenza</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+{% endblock %}<!-- Fine del blocco content -->

@@ -58,7 +58,7 @@ Add section comments as needed.
 
 {% if veicolo.libretto %}
 <p>
-  <a href="{{ url_for('download_libretto', fn=veicolo.libretto) }}" class="btn btn-outline-primary">
+  <a href="{{ url_for(\'download_libretto\', fn=veicolo.libretto) }}" class="btn btn-outline-primary">
     📄 Scarica Libretto
   </a>
 </p>
@@ -137,11 +137,11 @@ Add section comments as needed.
 
 <div class="d-flex gap-2">
   <!-- usa l'URL diretto, non url_for -->
-  <a href="{{ url_for('mod_v', vid=veicolo.id) }}" class="btn btn-warning">
+  <a href="{{ url_for(\'mod_v\', vid=veicolo.id) }}" class="btn btn-warning">
     ✏️ Modifica
   </a>
   <form method="post"
-        action="{{ url_for('elimina_veicolo_route', vid=veicolo.id) }}"
+        action="{{ url_for(\'elimina_veicolo_route\', vid=veicolo.id) }}"
         onsubmit="return confirm('Eliminare questo veicolo?');"
         class="d-inline">
     <button class="btn btn-danger">🗑️ Elimina Veicolo</button>

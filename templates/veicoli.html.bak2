@@ -16,7 +16,7 @@ Add section comments as needed.
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
   <h2 class="fw-bold">🚗 Veicoli</h2>
-  <a href="{{ url_for('aggiungi_veicolo_route') }}" class="btn btn-success">➕ Aggiungi Veicolo</a>
+  <a href="/aggiungi_veicolo" class="btn btn-success">➕ Aggiungi Veicolo</a>
 </div>
 <div class="table-responsive"><table class="table table-striped table-hover">
   <thead class="table-dark"><tr>
@@ -33,11 +33,11 @@ Add section comments as needed.
       <td>{{ v.anno if v.anno is defined else v[6] }}</td>
       <td>{{ v.km if v.km is defined else v[7] }}</td>
       <td class="d-flex flex-wrap gap-1">
-        <a href="{{ url_for('dettaglio_veicolo', vid=(v.id if v.id is defined else v[0])) }}" class="btn btn-info btn-sm">Dettagli</a>
-        <a href="{{ url_for('manutenzione', vid=(v.id if v.id is defined else v[0])) }}" class="btn btn-secondary btn-sm">Man. Ord.</a>
-        <a href="{{ url_for('scadenze', vid=(v.id if v.id is defined else v[0])) }}" class="btn btn-secondary btn-sm">Scadenze</a>
+        <a href="/veicolo/{{ v.id if v.id is defined else v[0] }}" class="btn btn-info btn-sm">Dettagli</a>
+        <a href="/manutenzione/{{ v.id if v.id is defined else v[0] }}" class="btn btn-secondary btn-sm">Man. Ord.</a>
+        <a href="/scadenze/{{ v.id if v.id is defined else v[0] }}" class="btn btn-secondary btn-sm">Scadenze</a>
       
-        <form method="post" action="{{ url_for('elimina_veicolo_route', vid=(v.id if v.id is defined else v[0])) }}" style="display:inline;" onsubmit="return confirm('Eliminare il veicolo?');">
+        <form method="post" action="/veicolo/delete/{{ v.id if v.id is defined else v[0] }}" style="display:inline;" onsubmit="return confirm('Eliminare il veicolo?');">
           <button class="btn btn-danger btn-sm" type="submit">🗑️</button>
         </form></td>
     </tr>

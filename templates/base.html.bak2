@@ -32,12 +32,12 @@ Add section comments as needed.
     <button class="btn btn-dark d-lg-none me-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasMenu" aria-label="Apri menu">
       ☰
     </button>
-    <a class="navbar-brand" href="{{ url_for('dashboard') }}">🚗 Gestionale</a>
+    <a class="navbar-brand" href="/dashboard">🚗 Gestionale</a>
     <div class="d-none d-lg-flex ms-3">
       <ul class="navbar-nav me-auto flex-row">
-        <li class="nav-item me-3"><a class="nav-link text-white" href="{{ url_for('dashboard') }}">Dashboard</a></li>
-        <li class="nav-item me-3"><a class="nav-link text-white" href="{{ url_for('veicoli') }}">Veicoli</a></li>
-        <li class="nav-item me-3"><a class="nav-link text-white" href="{{ url_for('users') }}">Utenti</a></li>
+        <li class="nav-item me-3"><a class="nav-link text-white" href="/dashboard">Dashboard</a></li>
+        <li class="nav-item me-3"><a class="nav-link text-white" href="/veicoli">Veicoli</a></li>
+        <li class="nav-item me-3"><a class="nav-link text-white" href="/users">Utenti</a></li>
       </ul>
     </div>
     <div class="d-flex align-items-center ms-auto">
@@ -45,7 +45,7 @@ Add section comments as needed.
         <img src="{{ url_for('static', filename='profiles/'~profile_img) }}" width="36" class="rounded-circle me-2">
       {% endif %}
       <span class="text-white me-3">{{ logged_user }}</span>
-      <a href="{{ url_for('logout') }}" class="btn btn-outline-light btn-sm">Logout</a>
+      <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>
     </div>
   </div>
 </nav>
@@ -56,9 +56,9 @@ Add section comments as needed.
   </div>
   <div class="offcanvas-body">
     <ul class="nav flex-column">
-      <li class="nav-item mb-2"><a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a></li>
-      <li class="nav-item mb-2"><a class="nav-link" href="{{ url_for('veicoli') }}">Veicoli</a></li>
-      <li class="nav-item mb-2"><a class="nav-link" href="{{ url_for('users') }}">Utenti</a></li>
+      <li class="nav-item mb-2"><a class="nav-link" href="/dashboard">Dashboard</a></li>
+      <li class="nav-item mb-2"><a class="nav-link" href="/veicoli">Veicoli</a></li>
+      <li class="nav-item mb-2"><a class="nav-link" href="/users">Utenti</a></li>
     </ul>
   </div>
 </div>
