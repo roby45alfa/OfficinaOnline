@@ -1,36 +1,58 @@
-<!--
-File: scadenze.html
-Template Jinja2 per l'app Officina.
-Spiega sezioni e blocchi del template.
--->
-
-<!--
-File: scadenze.html
-HTML/Jinja2 template for the officina project.
-Add section comments as needed.
--->
-
-<!-- Estende il layout base -->
+{# Aggiungi o modifica una scadenza #}
 {% extends 'base.html' %}
-<!-- Inizio del blocco content: qui viene inserito il contenuto della pagina -->
+{% from '_macros.html' import targa, csrf %}
+{% set modifica = s.id is defined and s.id %}
+{% set tipo_noto = (not s.tipo) or s.tipo in TIPI_SCADENZA %}
+{% block title %}{{ 'Modifica scadenza' if modifica else 'Nuova scadenza' }}{% endblock %}
 {% block content %}
-<h2>⏰ Scadenze</h2>
-<form method="post">
-  <div class="row g-3 mb-3">
-    <div class="col-md-6">
-      <label>Tipo</label>
-      <select name="tipo" class="form-select" required>
-        <option value="">-- Seleziona --</option>
-        <option value="Bollo">Bollo</option>
-        <option value="Assicurazione">Assicurazione</option>
-        <option value="Revisione">Revisione</option>
-      </select>
+<nav class="mb-2 small"><a href="{{ url_for('dettaglio_veicolo', vid=veicolo.id) }}#scadenze"><i class="bi bi-arrow-left"></i> Torna alla scheda</a></nav>
+<div class="d-flex flex-wrap align-items-center gap-3 mb-4">
+  {{ targa(veicolo.targa, 'media') }}
+  <h1 class="mb-0">{{ 'Modifica scadenza' if modifica else 'Nuova scadenza' }}</h1>
+</div>
+
+<form method="post" class="pannello" style="max-width: 640px">
+  {{ csrf() }}
+  <div class="corpo">
+    <fieldset class="mb-3">
+      <legend class="form-label fs-6">Tipo *</legend>
+      <div class="d-flex flex-wrap gap-2">
+        {% for t in TIPI_SCADENZA %}
+          <input type="radio" class="btn-check" name="tipo" id="t{{ loop.index }}" value="{{ t }}" required
+                 {{ 'checked' if (s.tipo == t) or (t == 'Altro' and not tipo_noto) }}>
+          <label class="btn btn-outline-primary" for="t{{ loop.index }}">{{ t }}</label>
+        {% endfor %}
+      </div>
+    </fieldset>
+    <div class="mb-3" id="boxAltro" {% if tipo_noto %}hidden{% endif %}>
+      <label class="form-label" for="tipo_altro">Descrizione</label>
+      <input id="tipo_altro" name="tipo_altro" class="form-control" value="{{ '' if tipo_noto else s.tipo }}" placeholder="es. Collaudo GPL, ZTL, Bollino blu">
     </div>
-    <div class="col-md-6">
-      <label>Data</label>
-      <input name="data_sc" type="date" class="form-control" required>
+    <div class="row g-3 mb-3">
+      <div class="col-sm-6">
+        <label class="form-label" for="data_sc">Scade il *</label>
+        <input id="data_sc" name="data_sc" type="date" class="form-control" required value="{{ s.data or '' }}">
+      </div>
+    </div>
+    <div class="mb-3">
+      <label class="form-label" for="note">Note</label>
+      <input id="note" name="note" class="form-control" value="{{ s.note or '' }}" placeholder="es. compagnia, numero polizza, importo">
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-primary">{{ 'Salva modifiche' if modifica else 'Aggiungi scadenza' }}</button>
+      <a href="{{ url_for('dettaglio_veicolo', vid=veicolo.id) }}#scadenze" class="btn btn-outline-secondary">Annulla</a>
     </div>
   </div>
-  <button class="btn btn-success">Salva Scadenza</button>
 </form>
-{% endblock %}<!-- Fine del blocco content -->
+{% endblock %}
+{% block scripts %}
+<script>
+  document.querySelectorAll('input[name=tipo]').forEach(function (r) {
+    r.addEventListener('change', function () {
+      var altro = r.value === 'Altro' && r.checked;
+      document.getElementById('boxAltro').hidden = !altro;
+      if (altro) document.getElementById('tipo_altro').focus();
+    });
+  });
+</script>
+{% endblock %}

@@ -1,185 +1,207 @@
-<!--
-File: veicolo.html
-Template Jinja2 per l'app Officina.
-Spiega sezioni e blocchi del template.
--->
-
-<!--
-File: veicolo.html
-HTML/Jinja2 template for the officina project.
-Add section comments as needed.
--->
-
-<!-- Estende il layout base -->
+{# Scheda veicolo: dati, prossimo tagliando, scadenze, storico interventi, foto #}
 {% extends 'base.html' %}
-
-<!-- Inizio del blocco content: qui viene inserito il contenuto della pagina -->
+{% from '_macros.html' import targa, stato, csrf, conferma %}
+{% block title %}{{ veicolo.targa|targa }}{% endblock %}
 {% block content %}
-<div class="card mb-4">
-  <div class="card-body">
-    <h3 class="card-title">📋 Dettagli Veicolo</h3>
-    <p class="fs-5"><strong>Proprietario:</strong> {{ veicolo.nome }} {{ veicolo.cognome }}</p>
-    <p class="fs-5"><strong>Targa:</strong> {{ veicolo.targa | upper }}</p>
-    <p class="fs-5"><strong>Marca/Modello:</strong> {{ veicolo.marca }} {{ veicolo.modello }}</p>
-    <p class="fs-5"><strong>Anno:</strong> {{ veicolo.anno }} | <strong>KM:</strong> {{ veicolo.km }}</p>
+<nav aria-label="breadcrumb" class="mb-2 small"><a href="{{ url_for('veicoli') }}"><i class="bi bi-arrow-left"></i> Veicoli</a></nav>
+
+<div class="d-flex flex-wrap align-items-center gap-3 mb-4">
+  {{ targa(veicolo.targa, 'grande') }}
+  <div class="me-auto">
+    <h1 class="mb-0">{{ veicolo.marca }} {{ veicolo.modello }}</h1>
+    <div class="tenue">{{ veicolo.nome }} {{ veicolo.cognome }}{% if veicolo.anno %} · {{ veicolo.anno }}{% endif %}{% if veicolo.carburante %} · {{ veicolo.carburante }}{% endif %}</div>
+  </div>
+  <div class="d-flex flex-wrap gap-2 no-print">
+    <a href="{{ url_for('manutenzione', vid=veicolo.id) }}" class="btn btn-primary"><i class="bi bi-wrench"></i> Registra intervento</a>
+    <div class="dropdown">
+      <button class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">Altro</button>
+      <ul class="dropdown-menu dropdown-menu-end">
+        <li><a class="dropdown-item" href="{{ url_for('scadenze', vid=veicolo.id) }}"><i class="bi bi-calendar-plus me-2"></i>Aggiungi scadenza</a></li>
+        <li><a class="dropdown-item" href="{{ url_for('mod_v', vid=veicolo.id) }}"><i class="bi bi-pencil me-2"></i>Modifica veicolo</a></li>
+        <li><a class="dropdown-item" href="{{ url_for('export_csv', vid=veicolo.id) }}"><i class="bi bi-filetype-csv me-2"></i>Esporta storico (CSV)</a></li>
+        <li><button class="dropdown-item" type="button" onclick="window.print()"><i class="bi bi-printer me-2"></i>Stampa scheda</button></li>
+        <li><hr class="dropdown-divider"></li>
+        <li>
+          <form method="post" action="{{ url_for('elimina_veicolo_route', vid=veicolo.id) }}"
+                onsubmit="return confirm({{ ('Eliminare ' ~ veicolo.targa ~ ' con tutti gli interventi, le scadenze e le foto? Non si può annullare.')|tojson|forceescape }});">
+            {{ csrf() }}<button class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i>Elimina veicolo</button>
+          </form>
+        </li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-4">
+    <section class="pannello mb-4">
+      <div class="testa"><h2>Contachilometri</h2></div>
+      <div class="corpo">
+        <div class="contakm">{{ veicolo.km|km }}</div>
+        <div class="small tenue">Si aggiorna da solo quando registri un intervento con più km.</div>
+      </div>
+    </section>
+
+    <section class="pannello mb-4">
+      <div class="testa"><h2>Prossimo tagliando</h2>{% if tagliando %}{{ stato(tagliando.stato) }}{% endif %}</div>
+      <div class="corpo">
+        {% if tagliando %}
+          <dl class="dati mb-3">
+            <dt>Entro il</dt><dd><strong>{{ tagliando.data|data_it }}</strong> <span class="tenue">({{ tagliando.data|tra_giorni }})</span></dd>
+            {% if tagliando.km %}<dt>o entro</dt><dd><strong>{{ tagliando.km|km }}</strong>
+              {% if tagliando.km_mancanti is not none %}<span class="tenue">({{ 'mancano ' ~ (tagliando.km_mancanti|km) if tagliando.km_mancanti > 0 else 'superati di ' ~ ((-tagliando.km_mancanti)|km) }})</span>{% endif %}</dd>{% endif %}
+            <dt>Ultimo</dt><dd>{{ tagliando.ultimo.data|data_it }}{% if tagliando.ultimo.km %} a {{ tagliando.ultimo.km|km }}{% endif %}</dd>
+          </dl>
+          <div class="avanzamento {{ tagliando.stato }}" role="progressbar" aria-label="Avanzamento verso il prossimo tagliando" aria-valuenow="{{ tagliando.percentuale }}" aria-valuemin="0" aria-valuemax="100"><span style="width: {{ tagliando.percentuale }}%"></span></div>
+        {% else %}
+          <p class="mb-0 tenue">Registra un intervento di tipo «Tagliando» per calcolare il prossimo.</p>
+        {% endif %}
+        <div class="small tenue mt-2">Intervallo: ogni {{ veicolo.intervallo_km|km }} o {{ veicolo.intervallo_mesi }} mesi. <a href="{{ url_for('mod_v', vid=veicolo.id) }}#intervalli" class="no-print">Cambia</a></div>
+      </div>
+    </section>
+
+    <section class="pannello mb-4" id="scadenze">
+      <div class="testa">
+        <h2>Scadenze</h2>
+        <a href="{{ url_for('scadenze', vid=veicolo.id) }}" class="btn btn-sm btn-outline-primary no-print"><i class="bi bi-plus-lg"></i> Aggiungi</a>
+      </div>
+      {% for s in scans %}
+        <div class="impegno {{ s.stato }}" style="grid-template-columns: 1fr auto;">
+          <div>
+            <div class="cosa">{{ s.tipo }}</div>
+            <div class="quando">{{ s.data|data_it }} · {{ s.data|tra_giorni }}{% if s.note %}<br>{{ s.note }}{% endif %}</div>
+          </div>
+          <div class="azioni no-print">
+            <div class="dropdown">
+              <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown" aria-label="Azioni scadenza"><i class="bi bi-three-dots"></i></button>
+              <ul class="dropdown-menu dropdown-menu-end">
+                <li><form method="post" action="{{ url_for('scadenza_rinnova', vid=veicolo.id, sid=s.id) }}">{{ csrf() }}<input type="hidden" name="next" value="{{ url_for('dettaglio_veicolo', vid=veicolo.id) }}#scadenze"><button class="dropdown-item"><i class="bi bi-arrow-repeat me-2"></i>Rinnova</button></form></li>
+                <li><a class="dropdown-item" href="{{ url_for('scadenza_modifica', vid=veicolo.id, sid=s.id) }}"><i class="bi bi-pencil me-2"></i>Modifica</a></li>
+                <li><form method="post" action="{{ url_for('scadenza_elimina', vid=veicolo.id, sid=s.id) }}" onsubmit="return confirm('Eliminare questa scadenza?');">{{ csrf() }}<button class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i>Elimina</button></form></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      {% else %}
+        <div class="vuoto"><i class="bi bi-calendar"></i>Nessuna scadenza. Aggiungi bollo, assicurazione e revisione per ricevere i promemoria.</div>
+      {% endfor %}
+    </section>
+
+    <section class="pannello mb-4">
+      <div class="testa"><h2>Documenti e foto</h2><a href="{{ url_for('mod_v', vid=veicolo.id) }}" class="small no-print">Gestisci</a></div>
+      <div class="corpo">
+        {% if veicolo.libretto %}
+          <a href="{{ url_for('download_libretto', fn=veicolo.libretto) }}" target="_blank" rel="noopener" class="btn btn-outline-secondary btn-sm mb-3"><i class="bi bi-file-earmark-text"></i> Apri libretto</a>
+        {% endif %}
+        {% if veicolo.immagini %}
+          <div class="galleria">
+            {% for img in veicolo.immagini %}
+              <button type="button" class="gallery-thumb" data-index="{{ loop.index0 }}" aria-label="Apri foto {{ loop.index }}">
+                <img src="{{ url_for('uploads', fn=img) }}" alt="Foto {{ loop.index }} di {{ veicolo.targa }}" loading="lazy">
+              </button>
+            {% endfor %}
+          </div>
+        {% elif not veicolo.libretto %}
+          <p class="tenue mb-0">Nessun documento o foto.</p>
+        {% endif %}
+      </div>
+    </section>
+
+    {% if veicolo.note %}
+    <section class="pannello mb-4"><div class="testa"><h2>Note</h2></div><div class="corpo" style="white-space: pre-line">{{ veicolo.note }}</div></section>
+    {% endif %}
+  </div>
+
+  <div class="col-lg-8">
+    <section class="pannello" id="interventi">
+      <div class="testa">
+        <h2>Storico interventi <span class="tenue fw-normal fs-6">{{ manut|length }}</span></h2>
+        {% if totale %}<span class="small tenue">Spesa registrata: <strong>{{ totale|euro }}</strong></span>{% endif %}
+      </div>
+      {% if manut %}
+      <ul class="cronologia">
+        {% for m in manut %}
+          <li class="{{ 'tagliando' if m.tipo == 'Tagliando' }}">
+            <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
+              <div>
+                <strong class="fs-6">{{ m.tipo }}</strong>
+                <span class="tenue"> · {{ m.data|data_it }}{% if m.km %} · {{ m.km|km }}{% endif %}</span>
+                {% if m.officina %}<div class="small tenue"><i class="bi bi-shop"></i> {{ m.officina }}</div>{% endif %}
+              </div>
+              <div class="d-flex align-items-center gap-2">
+                {% if m.costo is not none %}<span class="fw-semibold">{{ m.costo|euro }}</span>{% endif %}
+                <div class="dropdown no-print">
+                  <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown" aria-label="Azioni intervento"><i class="bi bi-three-dots"></i></button>
+                  <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" href="{{ url_for('manutenzione_modifica', vid=veicolo.id, mid=m.id) }}"><i class="bi bi-pencil me-2"></i>Modifica</a></li>
+                    <li><form method="post" action="{{ url_for('manutenzione_elimina', vid=veicolo.id, mid=m.id) }}" onsubmit="return confirm('Eliminare questo intervento?');">{{ csrf() }}<button class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i>Elimina</button></form></li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            {% set voci = m.details.items()|rejectattr('0', 'equalto', 'olio_tipo')|list %}
+            {% if voci or m.details.olio_tipo %}
+              <ul class="voci">
+                {% for key, val in voci %}
+                  <li>{{ VOCI_INTERVENTO.get(key, ('', key.replace('_',' ')|capitalize))[1] }}
+                    {% if val is mapping and (val.marca or val.cod) %}<small>{{ val.marca or '' }} {{ val.cod or '' }}</small>{% endif %}</li>
+                {% endfor %}
+                {% if m.details.olio_tipo %}<li>Olio <small>{{ m.details.olio_tipo }}</small></li>{% endif %}
+              </ul>
+            {% endif %}
+            {% if m.note %}<div class="small mt-2" style="white-space: pre-line">{{ m.note }}</div>{% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+        <div class="vuoto py-5"><i class="bi bi-tools"></i>Nessun intervento registrato.<br>
+          <a href="{{ url_for('manutenzione', vid=veicolo.id) }}">Registra il primo tagliando</a></div>
+      {% endif %}
+    </section>
   </div>
 </div>
 
 {% if veicolo.immagini %}
-<div class="row mb-4">
-  {% for img in veicolo.immagini %}
-    <div class="col-3 mb-2">
-      <img src="{{ url_for('uploads', fn=img) }}"
-           class="img-fluid rounded gallery-thumb"
-           style="cursor:pointer;"
-           data-index="{{ loop.index0 }}">
-    </div>
-  {% endfor %}
-</div>
-
-<!-- Modal galleria -->
-<div class="modal fade" id="galleryModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content bg-transparent border-0">
-      <div class="position-relative">
-        <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-2"
-                data-bs-dismiss="modal" aria-label="Chiudi"></button>
-        <div class="d-flex justify-content-center align-items-center">
-          <button id="prevImg" class="btn btn-secondary me-2" aria-label="Precedente">&larr;</button>
-          <img id="galleryImage" src="" class="img-fluid rounded" style="max-height:70vh; max-width:80%;">
-          <button id="nextImg" class="btn btn-secondary ms-2" aria-label="Successivo">&rarr;</button>
-        </div>
-        <div class="text-center text-white mt-2" id="galleryIndicator"></div>
+<div class="modal fade" id="galleryModal" tabindex="-1" aria-label="Foto del veicolo" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-xl">
+    <div class="modal-content bg-dark border-0">
+      <div class="modal-header border-0 py-2" data-bs-theme="dark">
+        <span class="text-white small" id="galleryIndicator"></span>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+      </div>
+      <div class="modal-body d-flex align-items-center justify-content-center gap-2 pt-0">
+        <button id="prevImg" class="btn btn-outline-light" aria-label="Foto precedente"><i class="bi bi-chevron-left"></i></button>
+        <img id="galleryImage" src="" alt="" class="img-fluid rounded" style="max-height:75vh; min-width:0">
+        <button id="nextImg" class="btn btn-outline-light" aria-label="Foto successiva"><i class="bi bi-chevron-right"></i></button>
       </div>
     </div>
   </div>
 </div>
 {% endif %}
+{% endblock %}
 
-{% if veicolo.libretto %}
-<p>
-  <a href="{{ url_for('download_libretto', fn=veicolo.libretto) }}" class="btn btn-outline-primary">
-    📄 Scarica Libretto
-  </a>
-</p>
-{% endif %}
-
-<div class="row">
-  <div class="col-md-6">
-    <div class="card mb-3">
-      <div class="card-body">
-        <h5 class="card-title">🛠️ Manutenzioni</h5>
-        <ul class="list-group list-group-flush">
-          {% for m in manut %}
-            <li class="list-group-item">
-              <div class="d-flex justify-content-between align-items-center">
-                <div>
-                  <strong>{{ m.data }}</strong> – {{ m.km }} km
-                </div>
-                <button class="btn btn-sm btn-outline-secondary"
-                        data-bs-toggle="collapse"
-                        data-bs-target="#manu-{{ m.id }}">
-                  Dettagli ▼
-                </button>
-              </div>
-              <div class="collapse mt-2" id="manu-{{ m.id }}">
-                {% if m.details is mapping %}
-                  <ul class="mb-0">
-                    {% for key, val in m.details.items() %}
-                      {% if key != 'olio_tipo' %}
-                        <li>
-                          <strong>{{ key.replace('_',' ')|title }}:</strong>
-                          {% if val %}
-                            Codice: {{ val.cod if val.cod is defined else val['cod'] }}
-                            {% if val.marca is defined or val['marca'] is defined %}
-                              , Marca: {{ val.marca if val.marca is defined else val['marca'] }}
-                            {% endif %}
-                          {% else %}
-                            Spuntato senza dettagli
-                          {% endif %}
-                        </li>
-                      {% endif %}
-                    {% endfor %}
-                    {% if m.details.olio_tipo %}
-                      <li><strong>Tipo Olio:</strong> {{ m.details.olio_tipo }}</li>
-                    {% endif %}
-                  </ul>
-                {% else %}
-                  <div>Nessun dettaglio salvato</div>
-                {% endif %}
-              </div>
-            </li>
-          {% else %}
-            <li class="list-group-item">Nessuna manutenzione</li>
-          {% endfor %}
-        </ul>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-md-6">
-    <div class="card mb-3">
-      <div class="card-body">
-        <h5 class="card-title">⏰ Scadenze</h5>
-        <ul class="list-group list-group-flush">
-          {% for s in scans %}
-            <li class="list-group-item">
-              <strong>{{ s.tipo or s.descrizione }}</strong> – {{ s.data }}
-            </li>
-          {% else %}
-            <li class="list-group-item">Nessuna scadenza</li>
-          {% endfor %}
-        </ul>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="d-flex gap-2">
-  <!-- usa l'URL diretto, non url_for -->
-  <a href="{{ url_for('mod_v', vid=veicolo.id) }}" class="btn btn-warning">
-    ✏️ Modifica
-  </a>
-  <form method="post"
-        action="{{ url_for('elimina_veicolo_route', vid=veicolo.id) }}"
-        onsubmit="return confirm('Eliminare questo veicolo?');"
-        class="d-inline">
-    <button class="btn btn-danger">🗑️ Elimina Veicolo</button>
-  </form>
-</div>
-
+{% block scripts %}
 {% if veicolo.immagini %}
 <script>
-  const images = [{% for img in veicolo.immagini %}"{{ url_for('uploads', fn=img) }}"{% if not loop.last %}, {% endif %}{% endfor %}];
-  let currentIndex = 0;
-  const galleryModalEl = document.getElementById('galleryModal');
-  const galleryImage   = document.getElementById('galleryImage');
-  const indicator      = document.getElementById('galleryIndicator');
-  const bsModal        = new bootstrap.Modal(galleryModalEl);
-
-  function updateIndicator() {
-    indicator.textContent = (currentIndex+1) + " / " + images.length;
-  }
-  function showImage(idx) {
-    currentIndex = (idx + images.length) % images.length;
-    galleryImage.src = images[currentIndex];
-    updateIndicator();
-  }
-
-  document.querySelectorAll('.gallery-thumb').forEach(el => {
-    el.addEventListener('click', () => {
-      showImage(parseInt(el.dataset.index));
-      bsModal.show();
+  (function () {
+    var images = {{ veicolo.immagini|map('string')|list|tojson }}.map(function (fn) {
+      return {{ url_for('uploads', fn='__FN__')|tojson }}.replace('__FN__', encodeURIComponent(fn));
     });
-    el.style.cursor = 'pointer';
-  });
-  document.getElementById('prevImg').addEventListener('click', () => showImage(currentIndex-1));
-  document.getElementById('nextImg').addEventListener('click', () => showImage(currentIndex+1));
-  document.addEventListener('keydown', e => {
-    if (!galleryModalEl.classList.contains('show')) return;
-    if (e.key === 'ArrowRight') showImage(currentIndex+1);
-    if (e.key === 'ArrowLeft')  showImage(currentIndex-1);
-  });
+    var idx = 0, modalEl = document.getElementById('galleryModal');
+    var img = document.getElementById('galleryImage'), ind = document.getElementById('galleryIndicator');
+    var modal = new bootstrap.Modal(modalEl);
+    function show(i) { idx = (i + images.length) % images.length; img.src = images[idx]; ind.textContent = (idx + 1) + ' / ' + images.length; }
+    document.querySelectorAll('.gallery-thumb').forEach(function (el) {
+      el.addEventListener('click', function () { show(parseInt(el.dataset.index, 10)); modal.show(); });
+    });
+    document.getElementById('prevImg').addEventListener('click', function () { show(idx - 1); });
+    document.getElementById('nextImg').addEventListener('click', function () { show(idx + 1); });
+    document.addEventListener('keydown', function (e) {
+      if (!modalEl.classList.contains('show')) return;
+      if (e.key === 'ArrowRight') show(idx + 1);
+      if (e.key === 'ArrowLeft') show(idx - 1);
+    });
+  })();
 </script>
 {% endif %}
-{% endblock %}<!-- Fine del blocco content -->
+{% endblock %}

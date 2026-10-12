@@ -1,31 +1,115 @@
-<!--
-File: manutenzione.html
-Template Jinja2 per l'app Officina.
-Spiega sezioni e blocchi del template.
--->
-
-<!--
-File: manutenzione.html
-HTML/Jinja2 template for the officina project.
-Add section comments as needed.
--->
-
-<!-- Estende il layout base -->
+{# Registra o modifica un intervento (tagliando, riparazione, ...) #}
 {% extends 'base.html' %}
-<!-- Inizio del blocco content: qui viene inserito il contenuto della pagina -->
+{% from '_macros.html' import targa, csrf %}
+{% set modifica = m.id is defined and m.id %}
+{% block title %}{{ 'Modifica intervento' if modifica else 'Nuovo intervento' }}{% endblock %}
 {% block content %}
-<h2>🛠 Manutenzione Ordinaria</h2>
-<form method="post">
-  <div class="mb-3"><label>Data</label><input name="data" type="date" class="form-control" required></div>
-  <div class="mb-3"><label>KM</label><input name="km_man" type="number" class="form-control" required></div>
-  {% for f,label in [('filtro_olio','Filtro Olio'),('filtro_gasolio','Filtro Gasolio'),('filtro_aria','Filtro Aria'),('filtro_abitacolo','Filtro Aria Abitacolo'),('olio','Olio'),('past_ant','Pastiglie Anteriori'),('past_post','Pastiglie Posteriori'),('dischi_ant','Dischi Anteriori'),('dischi_post','Dischi Posteriori')] %}
-  <div class="form-check"><input class="form-check-input" type="checkbox" name="{{ f }}" id="{{ f }}"><label class="form-check-label" for="{{ f }}">{{ label }}</label></div>
-  <div class="row g-2 mb-3">
-    <div class="col"><input name="cod_{{ f }}" placeholder="Codice" class="form-control"></div>
-    <div class="col"><input name="mar_{{ f }}" placeholder="Marca" class="form-control"></div>
+<nav class="mb-2 small"><a href="{{ url_for('dettaglio_veicolo', vid=veicolo.id) }}"><i class="bi bi-arrow-left"></i> Torna alla scheda</a></nav>
+<div class="d-flex flex-wrap align-items-center gap-3 mb-4">
+  {{ targa(veicolo.targa, 'media') }}
+  <h1 class="mb-0">{{ 'Modifica intervento' if modifica else 'Registra intervento' }}</h1>
+</div>
+
+<form method="post" style="max-width: 960px">
+  {{ csrf() }}
+  <section class="pannello mb-4">
+    <div class="corpo">
+      <div class="row g-3">
+        <div class="col-sm-6 col-lg-3">
+          <label class="form-label" for="tipo">Tipo</label>
+          <select id="tipo" name="tipo" class="form-select">
+            {% for t in TIPI_INTERVENTO %}<option {{ 'selected' if m.tipo == t }}>{{ t }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+          <label class="form-label" for="data">Data *</label>
+          <input id="data" name="data" type="date" class="form-control" required value="{{ m.data or oggi }}" max="{{ oggi }}">
+        </div>
+        <div class="col-sm-6 col-lg-3">
+          <label class="form-label" for="km_man">Km al momento</label>
+          <input id="km_man" name="km_man" type="number" min="0" inputmode="numeric" class="form-control" value="{{ m.km if m.km is not none else '' }}">
+          {% if not modifica and veicolo.km %}<div class="form-text">Ultimi registrati: {{ veicolo.km|km }}</div>{% endif %}
+        </div>
+        <div class="col-sm-6 col-lg-3">
+          <label class="form-label" for="costo">Costo (€)</label>
+          <input id="costo" name="costo" type="text" inputmode="decimal" class="form-control" value="{{ ('%.2f'|format(m.costo)).replace('.', ',') if m.costo is number else (m.costo or '') }}" placeholder="0,00">
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label" for="officina">Officina / chi l'ha fatto</label>
+          <input id="officina" name="officina" class="form-control" value="{{ m.officina or '' }}">
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label" for="olio_tipo">Tipo olio</label>
+          <input id="olio_tipo" name="olio_tipo" class="form-control" value="{{ m.details.olio_tipo or '' }}" placeholder="es. 5W-30 C3, 4,2 litri">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="pannello mb-4">
+    <div class="testa"><h2>Cosa è stato sostituito</h2>
+      {% if ultima and ultima.details %}<button type="button" class="btn btn-sm btn-outline-secondary" id="copiaUltimo" title="Riprende voci, marche e codici dall'ultimo intervento"><i class="bi bi-clipboard"></i> Come l'ultima volta</button>{% endif %}
+    </div>
+    <div class="corpo pt-0">
+      {% for gruppo in VOCI_INTERVENTO.values()|map(attribute=0)|unique %}
+        <div class="gruppo-voci">
+          <h3>{{ gruppo }}</h3>
+          <div class="row g-2">
+            {% for key, info in VOCI_INTERVENTO.items() if info[0] == gruppo %}{% set label = info[1] %}
+              {% set val = m.details.get(key) %}
+              <div class="col-md-6">
+                <div class="voce">
+                  <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" name="{{ key }}" id="{{ key }}" {{ 'checked' if val is not none }}>
+                    <label class="form-check-label" for="{{ key }}">{{ label }}</label>
+                  </div>
+                  <div class="dettagli row g-2">
+                    <div class="col"><input name="mar_{{ key }}" class="form-control form-control-sm" placeholder="Marca" aria-label="Marca {{ label }}" value="{{ val.marca if val is mapping and val.marca else '' }}"></div>
+                    <div class="col"><input name="cod_{{ key }}" class="form-control form-control-sm" placeholder="Codice ricambio" aria-label="Codice {{ label }}" value="{{ val.cod if val is mapping and val.cod else '' }}"></div>
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="pannello mb-4">
+    <div class="corpo">
+      <label class="form-label" for="note">Note</label>
+      <textarea id="note" name="note" rows="3" class="form-control" placeholder="Lavori extra, anomalie da controllare la prossima volta…">{{ m.note or '' }}</textarea>
+    </div>
+  </section>
+
+  <div class="d-flex gap-2">
+    <button class="btn btn-primary btn-lg">{{ 'Salva modifiche' if modifica else 'Registra intervento' }}</button>
+    <a href="{{ url_for('dettaglio_veicolo', vid=veicolo.id) }}" class="btn btn-lg btn-outline-secondary">Annulla</a>
   </div>
-  {% endfor %}
-  <div class="mb-3"><label>Tipo Olio</label><input name="olio_tipo" class="form-control"></div>
-  <button class="btn btn-success">Salva Manutenzione</button>
 </form>
-{% endblock %}<!-- Fine del blocco content -->
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Se scrivi marca o codice, la voce viene spuntata da sola
+  document.querySelectorAll('.voce .dettagli input').forEach(function (inp) {
+    inp.addEventListener('input', function () {
+      if (inp.value.trim()) inp.closest('.voce').querySelector('input[type=checkbox]').checked = true;
+    });
+  });
+  {% if ultima and ultima.details %}
+  document.getElementById('copiaUltimo').addEventListener('click', function () {
+    var d = {{ ultima.details|tojson }};
+    Object.keys(d).forEach(function (k) {
+      if (k === 'olio_tipo') { document.getElementById('olio_tipo').value = d[k] || ''; return; }
+      var cb = document.getElementById(k); if (!cb) return;
+      cb.checked = true;
+      var v = d[k] || {};
+      document.querySelector('[name="mar_' + k + '"]').value = v.marca || '';
+      document.querySelector('[name="cod_' + k + '"]').value = v.cod || '';
+    });
+  });
+  {% endif %}
+</script>
+{% endblock %}

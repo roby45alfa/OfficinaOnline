@@ -1,68 +1,93 @@
-<!--
-File: base.html
-Template Jinja2 per l'app Officina.
-Spiega sezioni e blocchi del template.
--->
-
-<!--
-File: base.html
-HTML/Jinja2 template for the officina project.
-Add section comments as needed.
--->
-
+{# Layout comune: barra superiore, navigazione mobile, messaggi, contenuto #}
+{% from '_macros.html' import targa, stato, csrf, conferma %}
 <!doctype html>
 <html lang="it">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Gestionale Veicoli</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <style>
-    /* ensure tables scroll on small screens */
-    .table-responsive {overflow-x: auto;}
-    /* improve vehicle details visibility */
-    .vehicle-info {font-size: 1.1rem; line-height:1.3;}
-    /* prevent auto scroll of galleries maybe */
-    .gallery img {cursor: pointer;}
-  </style>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#232b33">
+  <title>{% block title %}Officina{% endblock %} · Officina</title>
+  <script>
+    (function () {
+      var t = null;
+      try { t = localStorage.getItem('tema'); } catch (e) {}
+      if (!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-bs-theme', t);
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%23232b33'/><path d='M3 11h10M4 11l1.5-4h5L12 11' stroke='%23f2b705' stroke-width='1.6' fill='none'/></svg>">
 </head>
-<body class="bg-light">
-<nav class="navbar navbar-dark bg-dark">
-  <div class="container-fluid">
-    <button class="btn btn-dark d-lg-none me-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasMenu" aria-label="Apri menu">
-      ☰
-    </button>
-    <a class="navbar-brand" href="{{ url_for('dashboard') }}">🚗 Gestionale</a>
-    <div class="d-none d-lg-flex ms-3">
-      <ul class="navbar-nav me-auto flex-row">
-        <li class="nav-item me-3"><a class="nav-link text-white" href="{{ url_for('dashboard') }}">Dashboard</a></li>
-        <li class="nav-item me-3"><a class="nav-link text-white" href="{{ url_for('veicoli') }}">Veicoli</a></li>
-        <li class="nav-item me-3"><a class="nav-link text-white" href="{{ url_for('users') }}">Utenti</a></li>
-      </ul>
+<body>
+{% set ep = request.endpoint or '' %}
+{% macro navlink(endpoint, icona, testo, attivi) -%}
+  <a class="nav-link {{ 'active' if ep in attivi }}" href="{{ url_for(endpoint) }}" {% if ep in attivi %}aria-current="page"{% endif %}><i class="bi {{ icona }} me-1"></i>{{ testo }}</a>
+{%- endmacro %}
+{% set att_dash = ['dashboard'] %}
+{% set att_veic = ['veicoli','dettaglio_veicolo','mod_v','aggiungi_veicolo_route','manutenzione','manutenzione_modifica','scadenze','scadenza_modifica'] %}
+{% set att_scad = ['scadenzario'] %}
+{% set att_user = ['users','users_add','users_edit'] %}
+
+<nav class="navbar navbar-expand-lg barra py-0" data-bs-theme="dark">
+  <div class="container">
+    <a class="navbar-brand py-2" href="{{ url_for('dashboard') }}"><i class="bi bi-wrench-adjustable"></i> Officina</a>
+    <div class="d-none d-lg-flex me-auto ms-3">
+      {{ navlink('dashboard', 'bi-speedometer2', 'Riepilogo', att_dash) }}
+      {{ navlink('veicoli', 'bi-car-front', 'Veicoli', att_veic) }}
+      {{ navlink('scadenzario', 'bi-calendar-event', 'Scadenze', att_scad) }}
+      {% if current_user.is_admin %}{{ navlink('users', 'bi-people', 'Utenti', att_user) }}{% endif %}
     </div>
-    <div class="d-flex align-items-center ms-auto">
-      {% if profile_img %}
-        <img src="{{ url_for('static', filename='profiles/'~profile_img) }}" width="36" class="rounded-circle me-2">
-      {% endif %}
-      <span class="text-white me-3">{{ logged_user }}</span>
-      <a href="{{ url_for('logout') }}" class="btn btn-outline-light btn-sm">Logout</a>
+    <div class="dropdown ms-auto">
+      <button class="btn dropdown-toggle d-flex align-items-center gap-2 border-0" data-bs-toggle="dropdown" aria-expanded="false">
+        {% if current_user.profile_img %}
+          <img src="{{ url_for('profile_img', fn=current_user.profile_img) }}" class="avatar" alt="">
+        {% else %}
+          <span class="avatar">{{ current_user.username[:1]|upper }}</span>
+        {% endif %}
+        <span class="d-none d-sm-inline">{{ current_user.username }}</span>
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end">
+        <li><button class="dropdown-item" type="button" id="cambiaTema"><i class="bi bi-circle-half me-2"></i>Tema chiaro / scuro</button></li>
+        <li><a class="dropdown-item" href="{{ url_for('change_password') }}"><i class="bi bi-key me-2"></i>Cambia password</a></li>
+        {% if current_user.is_admin %}<li class="d-lg-none"><a class="dropdown-item" href="{{ url_for('users') }}"><i class="bi bi-people me-2"></i>Utenti</a></li>{% endif %}
+        <li><hr class="dropdown-divider"></li>
+        <li><a class="dropdown-item" href="{{ url_for('logout') }}"><i class="bi bi-box-arrow-right me-2"></i>Esci</a></li>
+      </ul>
     </div>
   </div>
 </nav>
-<div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasMenu">
-  <div class="offcanvas-header">
-    <h5 class="offcanvas-title">Menu</h5>
-    <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Chiudi"></button>
-  </div>
-  <div class="offcanvas-body">
-    <ul class="nav flex-column">
-      <li class="nav-item mb-2"><a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a></li>
-      <li class="nav-item mb-2"><a class="nav-link" href="{{ url_for('veicoli') }}">Veicoli</a></li>
-      <li class="nav-item mb-2"><a class="nav-link" href="{{ url_for('users') }}">Utenti</a></li>
-    </ul>
-  </div>
-</div>
-<div class="container my-4"><!-- Inizio del blocco content: qui viene inserito il contenuto della pagina -->
-{% block content %}{% endblock %}<!-- Fine del blocco content --></div>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body></html>
+
+<main class="container py-4">
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in msgs %}
+      <div class="alert alert-{{ 'info' if cat == 'message' else cat }} alert-dismissible fade show" role="alert">
+        {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Chiudi"></button>
+      </div>
+    {% endfor %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</main>
+
+<nav class="nav-mobile d-lg-none" aria-label="Navigazione principale">
+  <a href="{{ url_for('dashboard') }}" class="{{ 'active' if ep in att_dash }}"><i class="bi bi-speedometer2"></i>Riepilogo</a>
+  <a href="{{ url_for('veicoli') }}" class="{{ 'active' if ep in att_veic }}"><i class="bi bi-car-front"></i>Veicoli</a>
+  <a href="{{ url_for('scadenzario') }}" class="{{ 'active' if ep in att_scad }}"><i class="bi bi-calendar-event"></i>Scadenze</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  document.getElementById('cambiaTema').addEventListener('click', function () {
+    var el = document.documentElement;
+    var t = el.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+    el.setAttribute('data-bs-theme', t);
+    try { localStorage.setItem('tema', t); } catch (e) {}
+  });
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

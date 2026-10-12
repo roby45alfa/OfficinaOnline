@@ -1,0 +1,22 @@
+{# Macro riutilizzabili: targa, stato, campo CSRF #}
+
+{% macro targa(t, size='') -%}
+<span class="targa {{ size }}" aria-label="Targa {{ t }}"><span class="eu" aria-hidden="true">I</span><span class="num">{{ t|targa }}</span></span>
+{%- endmacro %}
+
+{% macro stato(s, testo=None) -%}
+{% set etichette = {'scaduta': 'Scaduta', 'imminente': 'In arrivo', 'ok': 'In regola'} %}
+{% set icone = {'scaduta': 'bi-exclamation-octagon-fill', 'imminente': 'bi-hourglass-split', 'ok': 'bi-check-circle-fill'} %}
+<span class="stato stato-{{ s or 'none' }}"><i class="bi {{ icone.get(s, 'bi-dash-circle') }}"></i>{{ testo or etichette.get(s, '—') }}</span>
+{%- endmacro %}
+
+{% macro csrf() -%}
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+{%- endmacro %}
+
+{% macro conferma(action, testo, domanda, classe='btn btn-outline-danger btn-sm', icona='bi-trash') -%}
+<form method="post" action="{{ action }}" class="d-inline" onsubmit="return confirm({{ domanda|tojson|forceescape }});">
+  {{ csrf() }}
+  <button class="{{ classe }}" type="submit"><i class="bi {{ icona }}"></i>{% if testo %} {{ testo }}{% endif %}</button>
+</form>
+{%- endmacro %}

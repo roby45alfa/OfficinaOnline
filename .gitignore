@@ -1,39 +1,23 @@
-# File: .gitignore
-# Ignore patterns for the officina project.
-
 # Python
 __pycache__/
 *.py[cod]
-*.egg-info/
-*.sqlite3
-*.db
-database.db
-*.py~
-
-# Env
-.env
 venv/
-env/
-*.venv
+.venv/
 
-# Uploads / media
+# Segreti e dati: mai su GitHub
+.env
+.secret_key
+*.db
+*.db-journal
+*.zip
 static/uploads/
 static/libretti/
 static/profiles/
 
-# IDE / OS
+# Varie
 .vscode/
 *.swp
 .DS_Store
-thumbs.db
-
-# Docker
-docker-compose.override.yml
 *.log
-
-# Byte-compiled
-*.pyc
-
-# Build
-dist/
-build/
+*.bak*
+docker-compose.override.yml

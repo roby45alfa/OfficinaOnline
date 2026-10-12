@@ -1,0 +1,45 @@
+{# Nuovo utente / modifica utente (solo admin) #}
+{% extends 'base.html' %}
+{% from '_macros.html' import csrf %}
+{% block title %}{{ 'Nuovo utente' if nuovo else 'Modifica utente' }}{% endblock %}
+{% block content %}
+<nav class="mb-2 small"><a href="{{ url_for('users') }}"><i class="bi bi-arrow-left"></i> Utenti</a></nav>
+<h1 class="mb-4">{{ 'Nuovo utente' if nuovo else 'Modifica ' ~ user.username }}</h1>
+<form method="post" enctype="multipart/form-data" class="pannello" style="max-width: 560px">
+  {{ csrf() }}
+  <div class="corpo">
+    <div class="mb-3">
+      <label class="form-label" for="username">Username *</label>
+      <input id="username" name="username" class="form-control" required value="{{ user.username or '' }}" autocomplete="off" autocapitalize="none">
+    </div>
+    <div class="mb-3">
+      <label class="form-label" for="password">{{ 'Password provvisoria *' if nuovo else 'Nuova password' }}</label>
+      <input id="password" name="password" type="password" class="form-control" minlength="6" {{ 'required' if nuovo }} autocomplete="new-password">
+      <div class="form-text">{{ 'Al primo accesso verrà chiesto di cambiarla.' if nuovo else 'Lascia vuoto per non cambiarla.' }}</div>
+    </div>
+    <div class="mb-3">
+      <label class="form-label" for="profile_img">Foto profilo</label>
+      <input id="profile_img" type="file" name="profile_img" accept="image/*" class="form-control">
+    </div>
+    {% if not user.is_superadmin and user.id != current_user.id %}
+    <div class="form-check mb-2">
+      <input class="form-check-input" type="checkbox" name="is_admin" id="adm" {{ 'checked' if user.is_admin }}>
+      <label class="form-check-label" for="adm">Amministratore <span class="tenue">(vede tutti i veicoli e gestisce gli utenti)</span></label>
+    </div>
+    {% endif %}
+    {% if not nuovo %}
+    <div class="form-check mb-3">
+      <input class="form-check-input" type="checkbox" name="force_change" id="fc" {{ 'checked' if user.must_change_password }}>
+      <label class="form-check-label" for="fc">Chiedi di cambiare password al prossimo accesso</label>
+    </div>
+    {% endif %}
+    {% if user.is_superadmin %}
+      <div class="alert alert-info py-2">Amministratore principale: i permessi non si possono rimuovere.</div>
+    {% endif %}
+    <div class="d-flex gap-2 mt-3">
+      <button class="btn btn-primary">{{ 'Crea utente' if nuovo else 'Salva modifiche' }}</button>
+      <a href="{{ url_for('users') }}" class="btn btn-outline-secondary">Annulla</a>
+    </div>
+  </div>
+</form>
+{% endblock %}

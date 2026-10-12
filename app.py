@@ -1,363 +1,842 @@
 """
 File: app.py
-Modulo Flask per la gestione dell'officina:
-  - Autenticazione utenti
-  - Gestione CRUD di veicoli, manutenzioni, scadenze
-  - Upload di immagini e PDF (libretti)
-  - Amministrazione utenti
+OfficinaOnline – gestione veicoli, tagliandi e scadenze (Flask).
+
+  - Autenticazione con ruoli (utente / admin / superadmin) e cambio password obbligatorio
+  - Veicoli con foto e libretto, storico interventi, scadenze, stima del prossimo tagliando
+  - Protezione CSRF, controllo proprietà su ogni veicolo e file, upload con nomi univoci
 """
 
-# ──────────────────────────────────────────────────────────────────────────────
-# IMPORTAZIONI
-# ──────────────────────────────────────────────────────────────────────────────
-from flask import (
-    Flask, render_template, request, redirect, session,
-    url_for, send_from_directory, abort
-)
+import csv
+import io
 import os
-from werkzeug.utils import secure_filename
-import json
-from werkzeug.security import generate_password_hash, check_password_hash
+import secrets
+import time
+import uuid
+from datetime import date, timedelta
+from functools import wraps
 
-# Import funzioni database
+from flask import (
+    Flask, Response, abort, flash, g, redirect, render_template, request,
+    send_from_directory, session, url_for,
+)
+from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.utils import secure_filename
+
+import db
 from db import (
-    init_db,
-    get_user_by_username, get_user_by_id, get_users,
-    add_user, delete_user, aggiorna_utente, set_password,
-    get_veicoli, get_veicolo_by_id,
-    aggiungi_veicolo, aggiorna_veicolo, elimina_veicolo,
-    aggiungi_manutenzione, get_manutenzioni,
-    aggiungi_scadenza, get_scadenze
+    aggiorna_manutenzione, aggiorna_scadenza, aggiorna_utente, aggiorna_veicolo,
+    aggiungi_manutenzione, aggiungi_scadenza, aggiungi_veicolo, add_months, add_user,
+    count_veicoli_utente, delete_user, elimina_manutenzione, elimina_scadenza,
+    elimina_veicolo, get_manutenzione, get_manutenzioni, get_scadenza, get_scadenze,
+    get_user_by_id, get_user_by_username, get_users, get_veicoli, get_veicolo_by_id,
+    init_db, parse_date, prossimo_tagliando, set_password, stato_data,
 )
 
 # ──────────────────────────────────────────────────────────────────────────────
-# MIDDLEWARE PER PREFISSO
+# CONFIGURAZIONE
 # ──────────────────────────────────────────────────────────────────────────────
-class PrefixMiddleware(object):
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+URL_PREFIX = os.environ.get("URL_PREFIX", "/gestioneveicoli").rstrip("/")
+
+UPLOAD_FOLDER = os.path.join(BASE_DIR, "static", "uploads")
+PDF_FOLDER = os.path.join(BASE_DIR, "static", "libretti")
+PROFILE_FOLDER = os.path.join(BASE_DIR, "static", "profiles")
+for _d in (UPLOAD_FOLDER, PDF_FOLDER, PROFILE_FOLDER):
+    os.makedirs(_d, exist_ok=True)
+
+IMG_EXT = {"jpg", "jpeg", "png", "gif", "webp", "heic", "heif"}
+LIBRETTO_EXT = {"pdf"} | IMG_EXT
+MIN_PASSWORD = 6
+
+# Voci selezionabili in un intervento: chiave → (gruppo, etichetta).
+# Le chiavi storiche (filtro_olio, olio, past_ant, ...) restano compatibili.
+VOCI_INTERVENTO = {
+    "olio":                  ("Olio e filtri", "Olio motore"),
+    "filtro_olio":           ("Olio e filtri", "Filtro olio"),
+    "filtro_aria":           ("Olio e filtri", "Filtro aria"),
+    "filtro_abitacolo":      ("Olio e filtri", "Filtro abitacolo"),
+    "filtro_gasolio":        ("Olio e filtri", "Filtro carburante"),
+    "candele":               ("Motore", "Candele"),
+    "cinghia_distribuzione": ("Motore", "Cinghia distribuzione"),
+    "pompa_acqua":           ("Motore", "Pompa acqua"),
+    "cinghia_servizi":       ("Motore", "Cinghia servizi"),
+    "liquido_raffreddamento": ("Motore", "Liquido raffreddamento"),
+    "past_ant":              ("Freni", "Pastiglie anteriori"),
+    "past_post":             ("Freni", "Pastiglie posteriori"),
+    "dischi_ant":            ("Freni", "Dischi anteriori"),
+    "dischi_post":           ("Freni", "Dischi posteriori"),
+    "liquido_freni":         ("Freni", "Liquido freni"),
+    "pneumatici":            ("Altro", "Pneumatici"),
+    "batteria":              ("Altro", "Batteria"),
+    "spazzole":              ("Altro", "Spazzole tergicristallo"),
+}
+TIPI_INTERVENTO = ["Tagliando", "Manutenzione straordinaria", "Riparazione", "Altro"]
+# Tipo scadenza → mesi per "Rinnova" (None = da inserire a mano)
+TIPI_SCADENZA = {"Bollo": 12, "Assicurazione": 12, "Revisione": 24,
+                 "Tagliando": 12, "Gomme invernali": 12, "Altro": None}
+CARBURANTI = ["Benzina", "Diesel", "GPL", "Metano", "Ibrida", "Elettrica"]
+
+
+class PrefixMiddleware:
+    """Monta l'app sotto URL_PREFIX; la radice "/" reindirizza al prefisso."""
+
     def __init__(self, app, prefix):
-        self.app = app
-        self.prefix = prefix
+        self.app, self.prefix = app, prefix
 
     def __call__(self, environ, start_response):
-        if environ['PATH_INFO'].startswith(self.prefix):
-            environ['PATH_INFO'] = environ['PATH_INFO'][len(self.prefix):] or '/'
-            environ['SCRIPT_NAME'] = self.prefix
+        path = environ.get("PATH_INFO", "")
+        if not self.prefix:
             return self.app(environ, start_response)
-        else:
-            start_response('404', [('Content-Type', 'text/plain')])
-            return [b'Not Found']
+        if path == self.prefix or path.startswith(self.prefix + "/"):
+            environ["PATH_INFO"] = path[len(self.prefix):] or "/"
+            environ["SCRIPT_NAME"] = environ.get("SCRIPT_NAME", "") + self.prefix
+            return self.app(environ, start_response)
+        if path in ("", "/"):
+            start_response("302 Found", [("Location", self.prefix + "/")])
+            return [b""]
+        start_response("404 Not Found", [("Content-Type", "text/plain")])
+        return [b"Not Found"]
 
-# ──────────────────────────────────────────────────────────────────────────────
-# CONFIGURAZIONE APP
-# ──────────────────────────────────────────────────────────────────────────────
+
+def _load_secret_key():
+    """SECRET_KEY dall'ambiente, altrimenti generata una volta e salvata su file."""
+    key = os.environ.get("SECRET_KEY")
+    if key:
+        return key
+    path = os.path.join(os.path.dirname(os.path.abspath(db.DB)), ".secret_key")
+    if os.path.exists(path):
+        with open(path) as f:
+            return f.read().strip()
+    key = secrets.token_hex(32)
+    with open(path, "w") as f:
+        f.write(key)
+    os.chmod(path, 0o600)
+    return key
+
+
 app = Flask(__name__)
-app.secret_key = 'supersecretfinal'
-app.wsgi_app = PrefixMiddleware(app.wsgi_app, prefix='/gestioneveicoli')
+app.config.update(
+    SECRET_KEY=_load_secret_key(),
+    MAX_CONTENT_LENGTH=40 * 1024 * 1024,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.environ.get("SESSION_COOKIE_SECURE", "0") == "1",
+    PERMANENT_SESSION_LIFETIME=timedelta(days=30),
+)
+# Rispetta X-Forwarded-* quando è dietro Nginx Proxy Manager o simili
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+app.wsgi_app = PrefixMiddleware(app.wsgi_app, URL_PREFIX)
 
-# Cartelle upload
-UPLOAD_FOLDER = 'static/uploads'
-PDF_FOLDER    = 'static/libretti'
-PROFILE_FOLDER= 'static/profiles'
-for d in (UPLOAD_FOLDER, PDF_FOLDER, PROFILE_FOLDER):
-    os.makedirs(d, exist_ok=True)
+init_db()
+
 
 # ──────────────────────────────────────────────────────────────────────────────
-# HOOK PRIMA DI OGNI RICHIESTA
+# SESSIONE, PERMESSI, CSRF
 # ──────────────────────────────────────────────────────────────────────────────
 @app.before_request
 def load_user():
-    username = session.get('username')
-    if username:
-        user = get_user_by_username(username)
-        if not user:
+    g.user = None
+    uid = session.get("user_id")
+    if uid:
+        g.user = get_user_by_id(uid)
+        if not g.user:
             session.clear()
-        else:
-            session['is_admin']      = user['is_admin']
-            session['profile_img']   = user['profile_img']
-            session['user_id']       = user['id']
-            session['must_change']   = user['must_change_password']
-            session['is_superadmin'] = user['is_superadmin']
 
-# ──────────────────────────────────────────────────────────────────────────────
-# INJECTION NEI TEMPLATE
-# ──────────────────────────────────────────────────────────────────────────────
+    # Le cartelle con file privati non si servono come static pubblico
+    if request.endpoint == "static":
+        fn = (request.view_args or {}).get("filename", "")
+        if fn.split("/")[0] in ("uploads", "libretti", "profiles"):
+            abort(404)
+
+    # Cambio password obbligatorio
+    if g.user and g.user["must_change_password"] and request.endpoint not in (
+            "change_password", "logout", "static", "profile_img", "healthz"):
+        return redirect(url_for("change_password"))
+
+    # CSRF su tutte le richieste POST
+    if request.method == "POST":
+        token = request.form.get("csrf_token") or request.headers.get("X-CSRF-Token")
+        if not token or not secrets.compare_digest(token, session.get("csrf_token", "")):
+            abort(400, "Sessione scaduta: ricarica la pagina e riprova.")
+
+
+def csrf_token():
+    if "csrf_token" not in session:
+        session["csrf_token"] = secrets.token_urlsafe(32)
+    return session["csrf_token"]
+
+
+# Globale Jinja: disponibile anche dentro le macro importate
+app.jinja_env.globals["csrf_token"] = csrf_token
+
+
 @app.context_processor
-def inject_user():
+def inject_globals():
     return dict(
-        logged_user=session.get('username'),
-        profile_img=session.get('profile_img')
+        current_user=g.get("user"),
+        VOCI_INTERVENTO=VOCI_INTERVENTO,
+        TIPI_INTERVENTO=TIPI_INTERVENTO,
+        TIPI_SCADENZA=TIPI_SCADENZA,
+        CARBURANTI=CARBURANTI,
+        oggi=date.today().isoformat(),
     )
 
+
+def login_required(f):
+    @wraps(f)
+    def wrapper(*a, **kw):
+        if not g.user:
+            return redirect(url_for("login", next=request.full_path))
+        return f(*a, **kw)
+    return wrapper
+
+
+def admin_required(f):
+    @wraps(f)
+    @login_required
+    def wrapper(*a, **kw):
+        if not g.user["is_admin"]:
+            abort(403)
+        return f(*a, **kw)
+    return wrapper
+
+
+def veicolo_o_404(vid):
+    v = get_veicolo_by_id(vid, g.user["id"], is_admin=bool(g.user["is_admin"]))
+    if not v:
+        abort(404)
+    return v
+
+
+def miei_veicoli():
+    return get_veicoli(g.user["id"], is_admin=bool(g.user["is_admin"]))
+
+
 # ──────────────────────────────────────────────────────────────────────────────
-# ROUTE LOGIN / LOGOUT / CHANGE PASSWORD
+# FILTRI TEMPLATE
 # ──────────────────────────────────────────────────────────────────────────────
-@app.route('/', methods=['GET','POST'])
+MESI = ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"]
+
+
+@app.template_filter("data_it")
+def data_it(s):
+    d = parse_date(s)
+    return f"{d.day} {MESI[d.month - 1]} {d.year}" if d else (s or "—")
+
+
+@app.template_filter("km")
+def fmt_km(n):
+    if n in (None, ""):
+        return "—"
+    try:
+        return f"{int(n):,}".replace(",", ".") + " km"
+    except (TypeError, ValueError):
+        return str(n)
+
+
+@app.template_filter("euro")
+def fmt_euro(n):
+    if n in (None, ""):
+        return ""
+    s = f"{float(n):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"€ {s}"
+
+
+@app.template_filter("targa")
+def fmt_targa(t):
+    """AB123CD → 'AB 123 CD' (formato targhe italiane), altrimenti invariata."""
+    t = (t or "").upper().replace(" ", "")
+    if len(t) == 7 and t[:2].isalpha() and t[2:5].isdigit() and t[5:].isalpha():
+        return f"{t[:2]} {t[2:5]} {t[5:]}"
+    return t or "—"
+
+
+@app.template_filter("tra_giorni")
+def tra_giorni(s):
+    d = parse_date(s)
+    if not d:
+        return ""
+    n = (d - date.today()).days
+    if n == 0:
+        return "oggi"
+    if n == 1:
+        return "domani"
+    if n == -1:
+        return "ieri"
+    if n < 0:
+        return f"{-n} giorni fa"
+    return f"tra {n} giorni"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# UPLOAD
+# ──────────────────────────────────────────────────────────────────────────────
+def _salva_file(storage, folder, allowed):
+    """Salva un file con nome univoco; None se vuoto o estensione non ammessa."""
+    if not storage or not storage.filename:
+        return None
+    name = secure_filename(storage.filename) or "file"
+    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    if ext not in allowed:
+        flash(f"File «{storage.filename}» ignorato: formato non ammesso.", "warning")
+        return None
+    fn = f"{uuid.uuid4().hex[:10]}_{name}"
+    storage.save(os.path.join(folder, fn))
+    return fn
+
+
+def _rimuovi_file(folder, fn):
+    if not fn:
+        return
+    path = os.path.join(folder, os.path.basename(fn))
+    if os.path.isfile(path):
+        os.remove(path)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# LOGIN / LOGOUT / PASSWORD
+# ──────────────────────────────────────────────────────────────────────────────
+_tentativi = {}  # ip → [timestamp falliti]
+
+
+def _troppi_tentativi(ip):
+    ora = time.time()
+    _tentativi[ip] = [t for t in _tentativi.get(ip, []) if ora - t < 600]
+    return len(_tentativi[ip]) >= 8
+
+
+@app.route("/", methods=["GET", "POST"])
 def login():
-    error = False
-    if request.method == 'POST':
-        user = get_user_by_username(request.form.get('username',''))
-        if user:
-            pw = request.form.get('password','')
-            if check_password_hash(user['password'], pw):
-                session['username'] = user['username']
-                if user['must_change_password']:
-                    return redirect(url_for('change_password'))
-                return redirect(url_for('dashboard'))
-        error = True
-    return render_template('login.html', error=error)
+    if g.user:
+        return redirect(url_for("dashboard"))
+    error = None
+    if request.method == "POST":
+        ip = request.remote_addr or "?"
+        if _troppi_tentativi(ip):
+            error = "Troppi tentativi falliti. Riprova tra qualche minuto."
+        else:
+            user = get_user_by_username(request.form.get("username", "").strip())
+            if user and check_password_hash(user["password"], request.form.get("password", "")):
+                _tentativi.pop(ip, None)
+                session.clear()
+                session.permanent = bool(request.form.get("ricordami"))
+                session["user_id"] = user["id"]
+                session["username"] = user["username"]  # compatibilità
+                nxt = request.args.get("next", "")
+                if nxt.startswith("/") and not nxt.startswith("//"):
+                    return redirect(request.script_root + nxt)
+                return redirect(url_for("dashboard"))
+            _tentativi.setdefault(ip, []).append(time.time())
+            error = "Username o password non corretti."
+    return render_template("login.html", error=error)
 
-@app.route('/change_password', methods=['GET','POST'])
-def change_password():
-    if not session.get('username'):
-        return redirect(url_for('login'))
-    if request.method == 'POST':
-        new_pw = request.form.get('password','').strip()
-        if not new_pw:
-            return render_template('change_password.html', error='Serve una password')
-        hashed = generate_password_hash(new_pw)
-        set_password(session['username'], hashed)
-        return redirect(url_for('dashboard'))
-    return render_template('change_password.html')
 
-@app.route('/logout')
+@app.route("/logout")
 def logout():
     session.clear()
-    return redirect(url_for('login'))
+    return redirect(url_for("login"))
+
+
+@app.route("/change_password", methods=["GET", "POST"])
+@login_required
+def change_password():
+    forzato = bool(g.user["must_change_password"])
+    error = None
+    if request.method == "POST":
+        attuale = request.form.get("attuale", "")
+        nuova = request.form.get("password", "")
+        conferma = request.form.get("conferma", "")
+        if not forzato and not check_password_hash(g.user["password"], attuale):
+            error = "La password attuale non è corretta."
+        elif len(nuova) < MIN_PASSWORD:
+            error = f"La nuova password deve avere almeno {MIN_PASSWORD} caratteri."
+        elif nuova != conferma:
+            error = "Le due password non coincidono."
+        elif check_password_hash(g.user["password"], nuova):
+            error = "Scegli una password diversa da quella attuale."
+        else:
+            set_password(g.user["username"], generate_password_hash(nuova))
+            flash("Password aggiornata.", "success")
+            return redirect(url_for("dashboard"))
+    return render_template("change_password.html", error=error, forzato=forzato)
+
 
 # ──────────────────────────────────────────────────────────────────────────────
-# ROUTE DASHBOARD
+# DASHBOARD E SCADENZARIO
 # ──────────────────────────────────────────────────────────────────────────────
-@app.route('/dashboard')
-def dashboard():
-    if not session.get('username'):
-        return redirect(url_for('login'))
-    is_admin = session.get('is_admin')
-    user_id  = session.get('user_id')
-    veicoli = get_veicoli(user_id, is_admin=is_admin)
+ORDINE_STATO = {"scaduta": 0, "imminente": 1, "ok": 2, None: 3}
 
-    last_m = []
-    due_s  = []
+
+def _impegni(veicoli, giorni=None):
+    """
+    Lista unica di scadenze + prossimi tagliandi stimati per i veicoli dati,
+    ordinata per urgenza. Se giorni è impostato, include solo quelli entro N giorni
+    (più quelli già scaduti).
+    """
+    oggi = date.today()
+    out = []
     for v in veicoli:
-        vid = v['id'] if isinstance(v, dict) else v[0]
-        for m in get_manutenzioni(vid):
-            last_m.append({'veicolo_id': vid, 'data': m[2], 'km': m[3]})
-        for s in get_scadenze(vid):
-            due_s.append({'veicolo_id': vid, 'tipo': s[2], 'data': s[3]})
-    return render_template('dashboard.html', veicoli=veicoli, last_m=last_m, due_s=due_s)
+        for s in get_scadenze(v["id"]):
+            d = parse_date(s["data"])
+            out.append({"veicolo": v, "tipo": s["tipo"], "data": s["data"],
+                        "note": s.get("note"), "stato": stato_data(d, oggi),
+                        "scadenza_id": s["id"], "giorni": (d - oggi).days if d else None})
+        pt = prossimo_tagliando(v, get_manutenzioni(v["id"]), oggi)
+        if pt:
+            out.append({"veicolo": v, "tipo": "Tagliando (stima)", "data": pt["data"],
+                        "stato": pt["stato"], "giorni": pt["giorni"], "tagliando": pt})
+    if giorni is not None:
+        out = [i for i in out if i["stato"] in ("scaduta", "imminente")
+               or (i["giorni"] is not None and i["giorni"] <= giorni)]
+    out.sort(key=lambda i: (ORDINE_STATO[i["stato"]], i["data"] or "9999"))
+    return out
+
+
+@app.route("/dashboard")
+@login_required
+def dashboard():
+    veicoli = miei_veicoli()
+    impegni = _impegni(veicoli, giorni=90)
+    n_scaduti = sum(1 for i in impegni if i["stato"] == "scaduta")
+    n_imminenti = sum(1 for i in impegni if i["stato"] == "imminente")
+
+    ultimi = []
+    for v in veicoli:
+        for m in get_manutenzioni(v["id"])[:3]:
+            ultimi.append({**m, "veicolo": v})
+    ultimi.sort(key=lambda m: m["data"] or "", reverse=True)
+
+    tagliandi = {v["id"]: prossimo_tagliando(v, get_manutenzioni(v["id"])) for v in veicoli}
+    return render_template("dashboard.html", veicoli=veicoli, impegni=impegni,
+                           n_scaduti=n_scaduti, n_imminenti=n_imminenti,
+                           ultimi=ultimi[:6], tagliandi=tagliandi)
+
+
+@app.route("/scadenzario")
+@login_required
+def scadenzario():
+    filtro = request.args.get("filtro", "tutte")
+    impegni = _impegni(miei_veicoli())
+    if filtro == "scadute":
+        impegni = [i for i in impegni if i["stato"] == "scaduta"]
+    elif filtro == "30":
+        impegni = [i for i in impegni if i["stato"] in ("scaduta", "imminente")]
+    return render_template("scadenzario.html", impegni=impegni, filtro=filtro)
+
 
 # ──────────────────────────────────────────────────────────────────────────────
-# ROUTE VEICOLI
+# VEICOLI
 # ──────────────────────────────────────────────────────────────────────────────
-@app.route('/veicoli')
+def _form_veicolo():
+    f = request.form
+    return dict(
+        nome=f.get("nome", "").strip(), cognome=f.get("cognome", "").strip(),
+        targa=f.get("targa", "").strip(), marca=f.get("marca", "").strip(),
+        modello=f.get("modello", "").strip(), anno=f.get("anno", "").strip(),
+        km=f.get("km"), carburante=f.get("carburante") or None,
+        intervallo_km=f.get("intervallo_km"), intervallo_mesi=f.get("intervallo_mesi"),
+        note=f.get("note", "").strip() or None,
+    )
+
+
+@app.route("/veicoli")
+@login_required
 def veicoli():
-    if not session.get('username'):
-        return redirect(url_for('login'))
-    veic = get_veicoli(session.get('user_id'), is_admin=session.get('is_admin'))
-    return render_template('veicoli.html', veicoli=veic)
+    veic = miei_veicoli()
+    tagliandi = {v["id"]: prossimo_tagliando(v, get_manutenzioni(v["id"])) for v in veic}
+    prossime = {}
+    for v in veic:
+        sc = [s for s in get_scadenze(v["id"]) if parse_date(s["data"])]
+        prossime[v["id"]] = sc[0] if sc else None
+    return render_template("veicoli.html", veicoli=veic, tagliandi=tagliandi,
+                           prossime=prossime)
 
-@app.route('/aggiungi_veicolo', methods=['GET','POST'])
+
+@app.route("/aggiungi_veicolo", methods=["GET", "POST"])
+@login_required
 def aggiungi_veicolo_route():
-    if not session.get('username'):
-        return redirect(url_for('login'))
+    utenti = get_users() if g.user["is_admin"] else []
+    if request.method == "POST":
+        dati = _form_veicolo()
+        if not dati["targa"]:
+            flash("La targa è obbligatoria.", "danger")
+            return render_template("veicolo_form.html", veicolo=dati, utenti=utenti, nuovo=True)
+        imgs = [fn for fn in (_salva_file(f, UPLOAD_FOLDER, IMG_EXT)
+                              for f in request.files.getlist("immagini")) if fn]
+        lib = _salva_file(request.files.get("libretto"), PDF_FOLDER, LIBRETTO_EXT)
+        owner = g.user["id"]
+        if g.user["is_admin"] and request.form.get("owner_id", "").isdigit():
+            owner = int(request.form["owner_id"])
+        vid = aggiungi_veicolo(owner, imgs=imgs, lib=lib, **dati)
+        flash(f"Veicolo {dati['targa'].upper()} aggiunto.", "success")
+        return redirect(url_for("dettaglio_veicolo", vid=vid))
+    return render_template("veicolo_form.html", veicolo={}, utenti=utenti, nuovo=True)
 
-    if request.method == 'POST':
-        data = request.form
-        imgs = []
-        for f in request.files.getlist('immagini'):
-            if f and f.filename:
-                fn = secure_filename(f.filename)
-                f.save(os.path.join(UPLOAD_FOLDER, fn))
-                imgs.append(fn)
-        lib = None
-        lf = request.files.get('libretto')
-        if lf and lf.filename:
-            fn = secure_filename(lf.filename)
-            lf.save(os.path.join(PDF_FOLDER, fn))
-            lib = fn
-        aggiungi_veicolo(session.get('user_id'),
-                         data.get('nome'), data.get('cognome'),
-                         data.get('targa'), data.get('marca'),
-                         data.get('modello'), data.get('anno'),
-                         data.get('km'), imgs, lib)
-        return redirect(url_for('veicoli'))
-    return render_template('aggiungi_veicolo.html')
 
-@app.route('/veicolo/<int:vid>')
+@app.route("/veicolo/<int:vid>")
+@login_required
 def dettaglio_veicolo(vid):
-    if not session.get('username'):
-        return redirect(url_for('login'))
-    v = get_veicolo_by_id(vid, session.get('user_id'), is_admin=session.get('is_admin'))
-    if not v:
-        abort(404)
-
-    raw_manut = get_manutenzioni(vid)
-    manut = []
-    for m in raw_manut:
-        details = json.loads(m[4]) if m[4] else {}
-        manut.append({'id': m[0], 'data': m[2], 'km': m[3], 'details': details})
-
+    v = veicolo_o_404(vid)
+    manut = get_manutenzioni(vid)
     scans = get_scadenze(vid)
-    return render_template('veicolo.html', veicolo=v, manut=manut, scans=scans)
+    for s in scans:
+        s["stato"] = stato_data(parse_date(s["data"]))
+    totale = sum(m["costo"] or 0 for m in manut)
+    return render_template("veicolo.html", veicolo=v, manut=manut, scans=scans,
+                           tagliando=prossimo_tagliando(v, manut), totale=totale)
 
-@app.route('/modifica_veicolo/<int:vid>', methods=['GET','POST'])
+
+@app.route("/modifica_veicolo/<int:vid>", methods=["GET", "POST"])
+@login_required
 def mod_v(vid):
-    if not session.get('username'):
-        return redirect(url_for('login'))
-    ve = get_veicolo_by_id(vid, session.get('user_id'), is_admin=session.get('is_admin'))
-    if not ve:
-        abort(404)
+    ve = veicolo_o_404(vid)
+    utenti = get_users() if g.user["is_admin"] else []
+    if request.method == "POST":
+        dati = _form_veicolo()
+        if not dati["targa"]:
+            flash("La targa è obbligatoria.", "danger")
+            return render_template("veicolo_form.html", veicolo={**ve, **dati},
+                                   utenti=utenti, nuovo=False)
+        imgs = ve["immagini"][:] + [fn for fn in (_salva_file(f, UPLOAD_FOLDER, IMG_EXT)
+                                                  for f in request.files.getlist("immagini")) if fn]
+        lib = ve.get("libretto")
+        nuovo_lib = _salva_file(request.files.get("libretto"), PDF_FOLDER, LIBRETTO_EXT)
+        if nuovo_lib:
+            _rimuovi_file(PDF_FOLDER, lib)
+            lib = nuovo_lib
+        owner = None
+        if g.user["is_admin"] and request.form.get("owner_id", "").isdigit():
+            owner = int(request.form["owner_id"])
+        aggiorna_veicolo(vid, imgs=imgs, lib=lib, owner_id=owner, **dati)
+        flash("Modifiche salvate.", "success")
+        return redirect(url_for("dettaglio_veicolo", vid=vid))
+    return render_template("veicolo_form.html", veicolo=ve, utenti=utenti, nuovo=False)
 
-    if request.method == 'POST':
-        data = request.form
-        imgs = ve.get('immagini', [])[:]
-        for f in request.files.getlist('immagini'):
-            if f and f.filename:
-                fn = secure_filename(f.filename)
-                f.save(os.path.join(UPLOAD_FOLDER, fn))
-                imgs.append(fn)
-        lib = ve.get('libretto')
-        lf  = request.files.get('libretto')
-        if lf and lf.filename:
-            fn = secure_filename(lf.filename)
-            lf.save(os.path.join(PDF_FOLDER, fn))
-            lib = fn
-        aggiorna_veicolo(vid,
-                         data.get('nome'), data.get('cognome'),
-                         data.get('targa'), data.get('marca'),
-                         data.get('modello'), data.get('anno'),
-                         data.get('km'), imgs, lib)
-        return redirect(url_for('dettaglio_veicolo', vid=vid))
-    return render_template('modifica_veicolo.html', veicolo=ve)
 
-# ──────────────────────────────────────────────────────────────────────────────
-# ROUTE MANUTENZIONE / SCADENZE
-# ──────────────────────────────────────────────────────────────────────────────
-@app.route('/manutenzione/<int:vid>', methods=['GET','POST'])
-def manutenzione(vid):
-    if not session.get('username'):
-        return redirect(url_for('login'))
-
-    if request.method == 'POST':
-        data = request.form
-        details = {}
-        fields = [
-            'filtro_olio','filtro_gasolio','filtro_aria','filtro_abitacolo',
-            'olio','past_ant','past_post','dischi_ant','dischi_post'
-        ]
-        for f in fields:
-            if data.get(f):
-                details[f] = {'cod': data.get(f'cod_{f}'), 'marca': data.get(f'mar_{f}')}
-        details['olio_tipo'] = data.get('olio_tipo')
-        aggiungi_manutenzione(vid, data.get('data'), data.get('km_man'), details)
-        return redirect(url_for('dettaglio_veicolo', vid=vid))
-
-    ve = get_veicolo_by_id(vid, session.get('user_id'), is_admin=session.get('is_admin'))
-    return render_template('manutenzione.html', veicolo=ve)
-
-@app.route('/scadenze/<int:vid>', methods=['GET','POST'])
-def scadenze(vid):
-    if not session.get('username'):
-        return redirect(url_for('login'))
-    if request.method == 'POST':
-        aggiungi_scadenza(vid, request.form.get('tipo'), request.form.get('data_sc'))
-        return redirect(url_for('dettaglio_veicolo', vid=vid))
-    ve = get_veicolo_by_id(vid, session.get('user_id'), is_admin=session.get('is_admin'))
-    sc = get_scadenze(vid)
-    return render_template('scadenze.html', veicolo=ve, scadenze=sc)
-
-# ──────────────────────────────────────────────────────────────────────────────
-# ROUTE UTENTI (ADMIN)
-# ──────────────────────────────────────────────────────────────────────────────
-@app.route('/users')
-def users():
-    if not session.get('username') or not session.get('is_admin'):
-        return redirect(url_for('login'))
-    users = get_users()
-    return render_template('users.html', users=users)
-
-@app.route('/users/add', methods=['GET','POST'])
-def users_add():
-    if not session.get('username') or not session.get('is_admin'):
-        return redirect(url_for('login'))
-
-    if request.method == 'POST':
-        uname = request.form.get('username')
-        pwd   = request.form.get('password')
-        is_admin_flag = 1 if request.form.get('is_admin') else 0
-        img = None
-        f = request.files.get('profile_img')
-        if f and f.filename:
-            fn = secure_filename(f.filename)
-            f.save(os.path.join(PROFILE_FOLDER, fn))
-            img = fn
-        hashed = generate_password_hash(pwd)
-        add_user(uname, hashed, img, is_admin_flag, must_change_password=1)
-        return redirect(url_for('users'))
-    return render_template('add_user.html')
-
-@app.route('/users/edit/<int:uid>', methods=['GET','POST'])
-def users_edit(uid):
-    if not session.get('username') or not session.get('is_admin'):
-        return redirect(url_for('login'))
-    user_to_edit = get_user_by_id(uid)
-    if not user_to_edit:
-        abort(404)
-    if user_to_edit['is_superadmin'] and session.get('username') != user_to_edit['username']:
-        return "Non puoi modificare l'admin principale", 403
-
-    if request.method == 'POST':
-        new_username = request.form.get('username')
-        new_password = request.form.get('password')
-        is_admin_flag= 1 if request.form.get('is_admin') else 0
-        force_change  = 1 if request.form.get('force_change') else 0
-        profile_img = user_to_edit['profile_img']
-        f = request.files.get('profile_img')
-        if f and f.filename:
-            fn = secure_filename(f.filename)
-            f.save(os.path.join(PROFILE_FOLDER, fn))
-            profile_img = fn
-        password_hash = None
-        if new_password:
-            password_hash = generate_password_hash(new_password)
-        if user_to_edit['is_superadmin'] and session.get('username') != user_to_edit['username']:
-            is_admin_flag = 1
-        aggiorna_utente(uid, username=new_username, password_hash=password_hash,
-                        profile_img=profile_img, is_admin=is_admin_flag,
-                        must_change_password=force_change)
-        return redirect(url_for('users'))
-    return render_template('edit_user.html', user=user_to_edit)
-
-@app.route('/users/delete/<int:uid>')
-def users_delete(uid):
-    if not session.get('username') or not session.get('is_admin'):
-        return redirect(url_for('login'))
-    delete_user(uid)
-    return redirect(url_for('users'))
-
-# ──────────────────────────────────────────────────────────────────────────────
-# ROUTE FILE
-# ──────────────────────────────────────────────────────────────────────────────
-@app.route('/uploads/<path:fn>')
-def uploads(fn):
-    return send_from_directory(UPLOAD_FOLDER, fn)
-
-@app.route('/libretti/<path:fn>')
-def download_libretto(fn):
-    return send_from_directory(PDF_FOLDER, fn, as_attachment=True)
-
-@app.route('/veicolo/delete/<int:vid>', methods=['POST'])
+@app.route("/veicolo/delete/<int:vid>", methods=["POST"])
+@login_required
 def elimina_veicolo_route(vid):
-    if not session.get('username'):
-        return redirect(url_for('login'))
-    v = get_veicolo_by_id(vid, session.get('user_id'), is_admin=session.get('is_admin'))
-    if not v:
-        abort(404)
+    v = veicolo_o_404(vid)
+    for fn in v["immagini"]:
+        _rimuovi_file(UPLOAD_FOLDER, fn)
+    _rimuovi_file(PDF_FOLDER, v.get("libretto"))
     elimina_veicolo(vid)
-    return redirect(url_for('veicoli'))
+    flash(f"Veicolo {v['targa']} eliminato con tutto lo storico.", "success")
+    return redirect(url_for("veicoli"))
+
+
+@app.route("/veicolo/<int:vid>/foto/elimina", methods=["POST"])
+@login_required
+def foto_elimina(vid):
+    v = veicolo_o_404(vid)
+    fn = request.form.get("fn")
+    if fn in v["immagini"]:
+        imgs = [i for i in v["immagini"] if i != fn]
+        aggiorna_veicolo(vid, v["nome"], v["cognome"], v["targa"], v["marca"], v["modello"],
+                         v["anno"], v["km"], imgs, v.get("libretto"), v.get("carburante"),
+                         v["intervallo_km"], v["intervallo_mesi"], v.get("note"))
+        _rimuovi_file(UPLOAD_FOLDER, fn)
+        flash("Foto eliminata.", "success")
+    return redirect(url_for("mod_v", vid=vid))
+
+
+@app.route("/veicolo/<int:vid>/libretto/elimina", methods=["POST"])
+@login_required
+def libretto_elimina(vid):
+    v = veicolo_o_404(vid)
+    if v.get("libretto"):
+        _rimuovi_file(PDF_FOLDER, v["libretto"])
+        aggiorna_veicolo(vid, v["nome"], v["cognome"], v["targa"], v["marca"], v["modello"],
+                         v["anno"], v["km"], v["immagini"], None, v.get("carburante"),
+                         v["intervallo_km"], v["intervallo_mesi"], v.get("note"))
+        flash("Libretto eliminato.", "success")
+    return redirect(url_for("mod_v", vid=vid))
+
+
+@app.route("/veicolo/<int:vid>/storico.csv")
+@login_required
+def export_csv(vid):
+    v = veicolo_o_404(vid)
+    buf = io.StringIO()
+    w = csv.writer(buf, delimiter=";")
+    w.writerow(["Data", "Km", "Tipo", "Voci", "Officina", "Costo", "Note"])
+    for m in get_manutenzioni(vid):
+        voci = []
+        for k, val in m["details"].items():
+            if k == "olio_tipo":
+                continue
+            label = VOCI_INTERVENTO.get(k, ("", k.replace("_", " ")))[1]
+            extra = " ".join(x for x in ((val or {}).get("marca"), (val or {}).get("cod")) if x) \
+                if isinstance(val, dict) else ""
+            voci.append(f"{label} {extra}".strip())
+        if m["details"].get("olio_tipo"):
+            voci.append(f"Tipo olio {m['details']['olio_tipo']}")
+        costo = f"{m['costo']:.2f}".replace(".", ",") if m["costo"] is not None else ""
+        w.writerow([m["data"], m["km"] or "", m["tipo"], ", ".join(voci),
+                    m.get("officina") or "", costo, m.get("note") or ""])
+    nome = f"storico_{secure_filename(v['targa'] or str(vid))}.csv"
+    return Response("﻿" + buf.getvalue(), mimetype="text/csv",
+                    headers={"Content-Disposition": f"attachment; filename={nome}"})
+
 
 # ──────────────────────────────────────────────────────────────────────────────
-# AVVIO
+# MANUTENZIONI
 # ──────────────────────────────────────────────────────────────────────────────
-if __name__ == '__main__':
-    init_db()
-    app.run(debug=True, host='0.0.0.0', port=5000)
+def _form_manutenzione():
+    f = request.form
+    details = {}
+    for key in VOCI_INTERVENTO:
+        if f.get(key):
+            details[key] = {"cod": f.get(f"cod_{key}", "").strip(),
+                            "marca": f.get(f"mar_{key}", "").strip()}
+    if f.get("olio_tipo", "").strip():
+        details["olio_tipo"] = f.get("olio_tipo").strip()
+    return dict(
+        data=f.get("data"), km=f.get("km_man"), details=details,
+        tipo=f.get("tipo") if f.get("tipo") in TIPI_INTERVENTO else "Tagliando",
+        costo=f.get("costo"), officina=f.get("officina", "").strip() or None,
+        note=f.get("note", "").strip() or None,
+    )
+
+
+@app.route("/manutenzione/<int:vid>", methods=["GET", "POST"])
+@login_required
+def manutenzione(vid):
+    ve = veicolo_o_404(vid)
+    if request.method == "POST":
+        dati = _form_manutenzione()
+        if not parse_date(dati["data"]):
+            flash("Inserisci una data valida.", "danger")
+            return render_template("manutenzione.html", veicolo=ve, m=dati)
+        aggiungi_manutenzione(vid, **dati)
+        flash("Intervento registrato.", "success")
+        return redirect(url_for("dettaglio_veicolo", vid=vid) + "#interventi")
+    ultima = (get_manutenzioni(vid) or [None])[0]
+    return render_template("manutenzione.html", veicolo=ve,
+                           m={"data": date.today().isoformat(), "km": ve.get("km"),
+                              "tipo": "Tagliando", "details": {}},
+                           ultima=ultima)
+
+
+@app.route("/manutenzione/<int:vid>/<int:mid>/modifica", methods=["GET", "POST"])
+@login_required
+def manutenzione_modifica(vid, mid):
+    ve = veicolo_o_404(vid)
+    m = get_manutenzione(mid, vid) or abort(404)
+    if request.method == "POST":
+        dati = _form_manutenzione()
+        if not parse_date(dati["data"]):
+            flash("Inserisci una data valida.", "danger")
+            return render_template("manutenzione.html", veicolo=ve, m={**m, **dati})
+        aggiorna_manutenzione(mid, vid, **dati)
+        flash("Intervento aggiornato.", "success")
+        return redirect(url_for("dettaglio_veicolo", vid=vid) + "#interventi")
+    return render_template("manutenzione.html", veicolo=ve, m=m)
+
+
+@app.route("/manutenzione/<int:vid>/<int:mid>/elimina", methods=["POST"])
+@login_required
+def manutenzione_elimina(vid, mid):
+    veicolo_o_404(vid)
+    elimina_manutenzione(mid, vid)
+    flash("Intervento eliminato.", "success")
+    return redirect(url_for("dettaglio_veicolo", vid=vid) + "#interventi")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# SCADENZE
+# ──────────────────────────────────────────────────────────────────────────────
+def _form_scadenza():
+    tipo = request.form.get("tipo", "").strip()
+    if tipo == "Altro" and request.form.get("tipo_altro", "").strip():
+        tipo = request.form["tipo_altro"].strip()
+    return tipo, request.form.get("data_sc"), request.form.get("note", "").strip() or None
+
+
+@app.route("/scadenze/<int:vid>", methods=["GET", "POST"])
+@login_required
+def scadenze(vid):
+    ve = veicolo_o_404(vid)
+    if request.method == "POST":
+        tipo, data_sc, note = _form_scadenza()
+        if not tipo or not parse_date(data_sc):
+            flash("Indica tipo e data della scadenza.", "danger")
+        else:
+            aggiungi_scadenza(vid, tipo, data_sc, note)
+            flash(f"Scadenza «{tipo}» aggiunta.", "success")
+            return redirect(url_for("dettaglio_veicolo", vid=vid) + "#scadenze")
+    return render_template("scadenze.html", veicolo=ve, s={})
+
+
+@app.route("/scadenze/<int:vid>/<int:sid>/modifica", methods=["GET", "POST"])
+@login_required
+def scadenza_modifica(vid, sid):
+    ve = veicolo_o_404(vid)
+    s = get_scadenza(sid, vid) or abort(404)
+    if request.method == "POST":
+        tipo, data_sc, note = _form_scadenza()
+        if not tipo or not parse_date(data_sc):
+            flash("Indica tipo e data della scadenza.", "danger")
+        else:
+            aggiorna_scadenza(sid, vid, tipo, data_sc, note)
+            flash("Scadenza aggiornata.", "success")
+            return redirect(url_for("dettaglio_veicolo", vid=vid) + "#scadenze")
+    return render_template("scadenze.html", veicolo=ve, s=s)
+
+
+@app.route("/scadenze/<int:vid>/<int:sid>/rinnova", methods=["POST"])
+@login_required
+def scadenza_rinnova(vid, sid):
+    """Sposta in avanti la scadenza del periodo tipico (es. bollo +12 mesi)."""
+    veicolo_o_404(vid)
+    s = get_scadenza(sid, vid) or abort(404)
+    mesi = TIPI_SCADENZA.get(s["tipo"]) or 12
+    d = parse_date(s["data"]) or date.today()
+    nuova = add_months(d, mesi).isoformat()
+    aggiorna_scadenza(sid, vid, s["tipo"], nuova, s.get("note"))
+    flash(f"{s['tipo']} rinnovato: nuova scadenza {data_it(nuova)}.", "success")
+    return redirect(request.form.get("next") or url_for("dettaglio_veicolo", vid=vid))
+
+
+@app.route("/scadenze/<int:vid>/<int:sid>/elimina", methods=["POST"])
+@login_required
+def scadenza_elimina(vid, sid):
+    veicolo_o_404(vid)
+    elimina_scadenza(sid, vid)
+    flash("Scadenza eliminata.", "success")
+    return redirect(url_for("dettaglio_veicolo", vid=vid) + "#scadenze")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# UTENTI (ADMIN)
+# ──────────────────────────────────────────────────────────────────────────────
+@app.route("/users")
+@admin_required
+def users():
+    return render_template("users.html", users=get_users())
+
+
+@app.route("/users/add", methods=["GET", "POST"])
+@admin_required
+def users_add():
+    if request.method == "POST":
+        uname = request.form.get("username", "").strip()
+        pwd = request.form.get("password", "")
+        if not uname or len(pwd) < MIN_PASSWORD:
+            flash(f"Username obbligatorio e password di almeno {MIN_PASSWORD} caratteri.", "danger")
+            return render_template("user_form.html", user={"username": uname}, nuovo=True)
+        img = _salva_file(request.files.get("profile_img"), PROFILE_FOLDER, IMG_EXT)
+        if not add_user(uname, generate_password_hash(pwd), img,
+                        1 if request.form.get("is_admin") else 0, must_change_password=1):
+            _rimuovi_file(PROFILE_FOLDER, img)
+            flash(f"Lo username «{uname}» esiste già.", "danger")
+            return render_template("user_form.html", user={"username": uname}, nuovo=True)
+        flash(f"Utente {uname} creato. Dovrà cambiare password al primo accesso.", "success")
+        return redirect(url_for("users"))
+    return render_template("user_form.html", user={}, nuovo=True)
+
+
+@app.route("/users/edit/<int:uid>", methods=["GET", "POST"])
+@admin_required
+def users_edit(uid):
+    u = get_user_by_id(uid) or abort(404)
+    if u["is_superadmin"] and g.user["id"] != u["id"]:
+        abort(403)
+    if request.method == "POST":
+        new_username = request.form.get("username", "").strip() or None
+        new_password = request.form.get("password", "")
+        if new_password and len(new_password) < MIN_PASSWORD:
+            flash(f"La password deve avere almeno {MIN_PASSWORD} caratteri.", "danger")
+            return render_template("user_form.html", user=u, nuovo=False)
+        img = _salva_file(request.files.get("profile_img"), PROFILE_FOLDER, IMG_EXT)
+        if img:
+            _rimuovi_file(PROFILE_FOLDER, u["profile_img"])
+        is_admin = 1 if (request.form.get("is_admin") or u["is_superadmin"]) else 0
+        # Un admin non può togliersi da solo i permessi
+        if g.user["id"] == u["id"]:
+            is_admin = 1
+        ok = aggiorna_utente(
+            uid, username=new_username,
+            password_hash=generate_password_hash(new_password) if new_password else None,
+            profile_img=img, is_admin=is_admin,
+            must_change_password=1 if request.form.get("force_change") else 0)
+        if not ok:
+            flash(f"Lo username «{new_username}» è già usato.", "danger")
+            return render_template("user_form.html", user=u, nuovo=False)
+        if g.user["id"] == u["id"] and new_username:
+            session["username"] = new_username
+        flash("Utente aggiornato.", "success")
+        return redirect(url_for("users"))
+    return render_template("user_form.html", user=u, nuovo=False)
+
+
+@app.route("/users/delete/<int:uid>", methods=["POST"])
+@admin_required
+def users_delete(uid):
+    u = get_user_by_id(uid) or abort(404)
+    if u["is_superadmin"] or u["id"] == g.user["id"]:
+        flash("Questo utente non può essere eliminato.", "danger")
+    elif count_veicoli_utente(uid):
+        flash(f"{u['username']} ha ancora veicoli: assegnali a un altro utente "
+              "dalla pagina del veicolo, poi riprova.", "warning")
+    elif delete_user(uid):
+        _rimuovi_file(PROFILE_FOLDER, u["profile_img"])
+        flash(f"Utente {u['username']} eliminato.", "success")
+    return redirect(url_for("users"))
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# FILE PROTETTI
+# ──────────────────────────────────────────────────────────────────────────────
+@app.route("/uploads/<path:fn>")
+@login_required
+def uploads(fn):
+    if not any(fn in v["immagini"] for v in miei_veicoli()):
+        abort(404)
+    return send_from_directory(UPLOAD_FOLDER, fn, max_age=86400)
+
+
+@app.route("/libretti/<path:fn>")
+@login_required
+def download_libretto(fn):
+    if not any(fn == v.get("libretto") for v in miei_veicoli()):
+        abort(404)
+    return send_from_directory(PDF_FOLDER, fn, as_attachment=request.args.get("dl") == "1")
+
+
+@app.route("/profilo/<path:fn>")
+@login_required
+def profile_img(fn):
+    return send_from_directory(PROFILE_FOLDER, fn, max_age=86400)
+
+
+@app.route("/healthz")
+def healthz():
+    return {"status": "ok"}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# ERRORI
+# ──────────────────────────────────────────────────────────────────────────────
+@app.errorhandler(400)
+@app.errorhandler(403)
+@app.errorhandler(404)
+@app.errorhandler(413)
+def errore(e):
+    messaggi = {
+        400: e.description if isinstance(e.description, str) else "Richiesta non valida.",
+        403: "Non hai i permessi per questa pagina.",
+        404: "Pagina o veicolo non trovato.",
+        413: "File troppo grande (massimo 40 MB per invio).",
+    }
+    return render_template("errore.html", codice=e.code,
+                           messaggio=messaggi.get(e.code, "Errore")), e.code
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# AVVIO (sviluppo). In produzione: gunicorn, vedi entrypoint.sh
+# ──────────────────────────────────────────────────────────────────────────────
+if __name__ == "__main__":
+    app.run(debug=os.environ.get("FLASK_DEBUG") == "1", host="0.0.0.0", port=5000)

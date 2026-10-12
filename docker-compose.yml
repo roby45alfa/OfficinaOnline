@@ -1,7 +1,4 @@
-# File: docker-compose.yml
-# Docker configuration for the officina project.
-
-version: '3.9'
+# OfficinaOnline – avvio: docker compose up -d --build
 services:
   officina:
     build: .
@@ -9,7 +6,15 @@ services:
     restart: unless-stopped
     ports:
       - "5000:5000"
+    env_file: .env
     environment:
-      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - TZ=Europe/Rome
     volumes:
+      # Codice, database.db e foto/libretti in static/ restano sulla cartella del progetto
       - .:/app
+    labels:
+      - "homepage.group=Automazione"
+      - "homepage.name=Officina"
+      - "homepage.icon=tools"
+      - "homepage.href=http://192.168.1.199:5000/gestioneveicoli/"
+      - "homepage.description=Tagliandi e scadenze veicoli"

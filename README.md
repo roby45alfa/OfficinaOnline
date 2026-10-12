@@ -1,271 +1,108 @@
-<!--
-File: README.md
-Documentazione completa per il progetto “Officina”
--->
+# OfficinaOnline – tagliandi e scadenze veicoli
 
-# Gestionale Officina – Flask + Telegram Bot
+Web-app Flask + bot Telegram per tenere lo storico degli interventi, sapere quando
+tocca il prossimo tagliando e non dimenticare bollo, assicurazione e revisione.
 
-Una soluzione full-stack per gestire veicoli, manutenzioni, scadenze e utenti con ruoli differenziati. Pensata per piccole officine o privati che vogliono una web-app leggera e un bot Telegram per interazione quick-access.
+## Cosa fa
 
----
+- **Riepilogo**: una lista unica di cosa scade (superato / entro 30 giorni / in regola),
+  con il prossimo tagliando stimato per ogni veicolo e i pulsanti «Rinnova» e «Registra».
+- **Prossimo tagliando**: calcolato dall'ultimo intervento di tipo «Tagliando» con
+  l'intervallo del veicolo (default 15.000 km o 12 mesi, modificabile). Vale la prima soglia.
+- **Interventi**: tipo, data, km, costo, officina, note e 18 voci di ricambio (olio, filtri,
+  distribuzione, freni, gomme, batteria…) con marca e codice. «Come l'ultima volta» ricopia
+  i ricambi dell'intervento precedente. Modifica ed eliminazione.
+- **Contachilometri** aggiornato da solo quando registri un intervento con più km.
+- **Scadenze**: bollo, assicurazione, revisione, tagliando, gomme invernali o testo libero.
+  «Rinnova» sposta la data di 12 mesi (revisione 24).
+- **Veicoli**: ricerca, foto con galleria, libretto (PDF o foto), note, esportazione CSV
+  dello storico (si apre in Excel), stampa scheda.
+- **Utenti**: utente / amministratore / amministratore principale. Gli utenti vedono solo
+  i propri veicoli; un admin può assegnare un veicolo a un altro utente.
+- **Tema chiaro/scuro**, utilizzabile da smartphone (barra di navigazione in basso).
+- **Bot Telegram**: scheda veicolo, «Da fare», registrazione guidata di interventi,
+  scadenze e km, promemoria giornaliero in ora italiana.
 
-## Indice
-
-1. [Panoramica](#panoramica)  
-2. [Caratteristiche Principali](#caratteristiche-principali)  
-3. [Prerequisiti](#prerequisiti)  
-4. [Installazione & Configurazione](#installazione--configurazione)  
-5. [Esecuzione via Docker](#esecuzione-via-docker)  
-6. [Esecuzione in Locale](#esecuzione-in-locale)  
-7. [Struttura del Progetto](#struttura-del-progetto)  
-8. [Endpoint Web](#endpoint-web)  
-9. [Bot Telegram](#bot-telegram)  
-10. [Gestione Utenti e Sicurezza](#gestione-utenti-e-sicurezza)  
-11. [Backup & Manutenzione](#backup--manutenzione)  
-12. [Possibili Estensioni](#possibili-estensioni)  
-13. [Licenza](#licenza)  
-
----
-
-## Panoramica
-
-Questo progetto fornisce:
-
-- **Interfaccia Web**: realizzata con Flask, Bootstrap 5 e SQLite per il database.  
-- **Telegram Bot**: implementato con python-telegram-bot, per comandi e notifiche.  
-- **Container Docker**: `Dockerfile` e `docker-compose.yml` pronti all’uso.  
-
-Ogni utente (standard o admin) può gestire i propri veicoli, registrare manutenzioni e aggiungere scadenze (bollo, assicurazione, revisione). Un superadmin iniziale (`admin`/`admin`) può amministrare anche gli altri utenti.
-
----
-
-## Caratteristiche Principali
-
-- **Autenticazione e Ruoli**  
-  - Superadmin (`admin`) non demovibile né rimovibile.  
-  - Admin possono creare/modificare/eliminare utenti (tranne il superadmin).  
-  - Utenti standard vedono solo i propri veicoli e dati.  
-  - Cambio password obbligatorio al primo login o quando forzato.  
-
-- **Gestione Veicoli**  
-  - CRUD veicoli con campi: proprietario, targa, marca, modello, anno, km.  
-  - Upload multiplo di immagini con galleria lightbox.  
-  - Upload/download PDF del libretto.  
-
-- **Manutenzioni**  
-  - Storico con data, km e dettagli JSON-encoded.  
-  - Checkbox granulari per filtri e ricambi, con codice e marca.  
-  - Tipo olio a parte e campo note libero.  
-
-- **Scadenze**  
-  - Aggiunta di scadenze (tipo + data).  
-  - Filtro prossime 7 giorni, scadute o tutte.  
-
-- **Telegram Bot**  
-  - `/login`, `/logout`, `/help`  
-  - Menu a pulsanti per Veicoli, Manutenzioni, Scadenze  
-  - Inline keyboard per selezionare veicolo e visualizzare/elencare o aggiungere record  
-  - Form interattivo per aggiungere manutenzioni (tipo, data, note)  
-  - Notifiche giornaliere UTC con report scadenze (configurabili).  
-
-- **Docker Ready**  
-  - Immagine basata su Python 3.11-slim.  
-  - `docker compose up` lancia web server e bot in parallelo.  
-
----
-
-## Prerequisiti
-
-- Docker ≥ 20.10  
-- Docker Compose ≥ 1.29  
-- (Opzionale) Python 3.11 se si esegue in locale  
-- File `.env` con variabili d’ambiente  
-
----
-
-## Installazione & Configurazione
-
-1. **Clona il repository**  
-   ```bash
-   git clone https://github.com/roby45alfa/OfficinaOnline.git
-   cd officina
-   ```
-
-2. **Crea file `.env`**  
-   ```ini
-   TELEGRAM_TOKEN=il_tuo_token
-   FLASK_ENV=production
-   SECRET_KEY=una_chiave_super_segreta
-   ```
-
-3. **Verifica `app.py`**  
-   - Imposta `app.secret_key` con `SECRET_KEY`.  
-   - (Opzionale) Modifica percorsi upload in `UPLOAD_FOLDER`, `PDF_FOLDER`, `PROFILE_FOLDER`.  
-
-4. **Database**  
-   Al primo avvio `init_db()` crea le tabelle e l’utente superadmin:  
-   - Username: `admin`  
-   - Password: `admin`  
-
----
-
-## Esecuzione via Docker
+## Avvio con Docker
 
 ```bash
-# Costruisci le immagini
-docker compose build
-
-# Avvia in background
-docker compose up -d
-
-# Monitora i log
+cp .env.example .env      # poi compila TELEGRAM_TOKEN e SECRET_KEY
+docker compose up -d --build
 docker compose logs -f
 ```
 
-- Web UI: `http://localhost:5000`  
-- Il bot risponde via polling al token configurato.  
+Sito: `http://IP-DEL-SERVER:5000/gestioneveicoli/` (anche `http://IP:5000/` reindirizza lì).
+Primo accesso: `admin` / `admin`, poi viene chiesto di cambiare password.
 
----
+### Aggiornare un'installazione esistente
 
-## Esecuzione in Locale (senza Docker)
+Il database esistente viene aggiornato da solo all'avvio: si aggiungono colonne e tabelle,
+nessun dato viene cancellato. Fai comunque una copia di `database.db` prima.
+
+1. `docker compose down`
+2. copia `database.db` in un posto sicuro
+3. sostituisci i file del progetto (tieni `database.db`, `.env` e la cartella `static/`)
+4. `docker compose up -d --build`
+
+Dopo l'aggiornamento tutti devono rifare il login (cambia la gestione delle sessioni) e
+sul bot va rifatto `/login` una volta: da quel momento la sessione resta anche ai riavvii.
+
+### Dietro Nginx Proxy Manager
+
+Inoltra `/gestioneveicoli` a `http://IP:5000` mantenendo il percorso. L'app legge gli header
+`X-Forwarded-*`. Se il sito è solo in HTTPS imposta `SESSION_COOKIE_SECURE=1`.
+Per servirlo alla radice di un sottodominio usa `URL_PREFIX=` (vuoto).
+
+## Avvio senza Docker (sviluppo)
 
 ```bash
-# Virtualenv
-python3 -m venv venv
-source venv/bin/activate
-
-# Dipendenze
+python3 -m venv venv && . venv/bin/activate
 pip install -r requirements.txt
-
-# Variabili
-export TELEGRAM_TOKEN=il_tuo_token
-export FLASK_ENV=development
-export SECRET_KEY=supersegreta
-
-# Avvia web
-python app.py
-
-# In un altro terminale, avvia bot
-python telegram_bot.py
+FLASK_DEBUG=1 python app.py            # sito su :5000
+TELEGRAM_TOKEN=... python telegram_bot.py
 ```
 
----
+## Variabili d'ambiente
 
-## Struttura del Progetto
-
-```
-.
-├── app.py
-├── db.py
-├── telegram_bot.py
-├── requirements.txt
-├── Dockerfile
-├── docker-compose.yml
-├── .env.example
-├── README.md
-├── static/
-│   ├── uploads/
-│   ├── libretti/
-│   └── profiles/
-└── templates/
-    ├── base.html
-    ├── login.html
-    ├── dashboard.html
-    ├── veicoli.html
-    ├── aggiungi_veicolo.html
-    ├── dettaglio_veicolo.html
-    ├── modifica_veicolo.html
-    ├── manutenzione.html
-    ├── scadenze.html
-    └── users/
-        ├── users.html
-        ├── add_user.html
-        └── edit_user.html
-```
-
----
-
-## Endpoint Web
-
-| Metodo   | URL                           | Descrizione                                |
-| -------- | ----------------------------- | ------------------------------------------ |
-| GET      | `/`                           | Login o redirect a dashboard               |
-| GET/POST | `/change_password`            | Cambio password (first login)              |
-| GET      | `/dashboard`                  | Panoramica veicoli, manutenzioni, scadenze |
-| GET      | `/veicoli`                    | Lista veicoli                              |
-| GET/POST | `/aggiungi_veicolo`           | Form / salva nuovo veicolo                 |
-| GET      | `/veicolo/<id>`               | Dettaglio veicolo                          |
-| GET/POST | `/modifica_veicolo/<id>`      | Form / aggiorna veicolo                    |
-| GET/POST | `/manutenzione/<id>`          | Form / salva manutenzione                  |
-| GET/POST | `/scadenze/<id>`              | Form / salva scadenza                      |
-| GET      | `/users`                      | Lista utenti (admin)                       |
-| GET/POST | `/users/add`                  | Form / salva nuovo utente (admin)          |
-| GET/POST | `/users/edit/<id>`            | Form / aggiorna utente (admin)             |
-| GET      | `/users/delete/<id>`          | Elimina utente (admin)                     |
-| POST     | `/veicolo/delete/<id>`        | Elimina veicolo (solo proprietario o admin)|
-
----
+| Variabile | Default | Uso |
+|---|---|---|
+| `TELEGRAM_TOKEN` | – | token del bot; se vuoto il bot non parte |
+| `SECRET_KEY` | generata in `.secret_key` | firma delle sessioni |
+| `URL_PREFIX` | `/gestioneveicoli` | percorso del sito |
+| `DB_PATH` | `database.db` | file SQLite |
+| `SESSION_COOKIE_SECURE` | `0` | `1` se solo HTTPS |
+| `ORA_NOTIFICHE` | `08:00` | ora del promemoria Telegram |
+| `TZ` | `Europe/Rome` | fuso orario |
 
 ## Bot Telegram
 
-- **Slash commands**  
-  - `/start`, `/help`, `/login`, `/logout`, `/veicoli`  
-  - `/attiva_notifiche`, `/disattiva_notifiche`, `/imposta_notifiche HH:MM`
+`/login utente password` (il messaggio con la password viene cancellato dalla chat),
+`/veicoli`, `/dafare`, `/notifiche on|off`, `/annulla`, `/logout`, oppure i pulsanti del menu.
 
-- **Menu a pulsanti**  
-  - 🚗 Veicoli → elenco o inline  
-  - 🔧 Manutenzioni → selezione + elenco + aggiungi  
-  - ⏰ Scadenze → selezione + filtri + aggiungi  
+## Sicurezza
 
-- **Form interattivo**  
-  1. Clicca “➕ Aggiungi”  
-  2. Scegli campo (tipo/data/note)  
-  3. Inserisci valore  
-  4. Salva  
+- Password con hash, cambio obbligatorio al primo accesso, minimo 6 caratteri.
+- Protezione CSRF su tutti i form; tutte le azioni che modificano dati sono POST.
+- Ogni pagina, foto e libretto controlla che il veicolo appartenga all'utente.
+- Upload con nomi univoci (niente sovrascritture) e solo formati ammessi.
+- Blocco temporaneo dopo 8 login falliti in 10 minuti dallo stesso IP.
+- `.env`, database e caricamenti sono esclusi da Git.
 
-- **Notifiche**  
-  Report quotidiano UTC su scadenze scadute/prossime.
+## Struttura
 
----
+```
+app.py              sito Flask (rotte, permessi, upload)
+db.py               database SQLite, migrazioni, calcolo scadenze e tagliandi
+telegram_bot.py     bot Telegram
+templates/          pagine HTML (Jinja2 + Bootstrap 5)
+static/css/app.css  stile
+static/uploads|libretti|profiles   file caricati (non su Git)
+```
 
-## Gestione Utenti e Sicurezza
+## Backup
 
-- **Superadmin**  
-  - `admin`/`admin` (cambio obbligatorio)  
-  - Non rimovibile  
-
-- **Admin**  
-  - Gestione utenti (esclude superadmin)  
-
-- **Standard**  
-  - Accesso limitato ai propri dati  
-
-- **Protezione**  
-  - Password hashate (`werkzeug.security`)  
-  - Sessioni server-side (`secret_key`)  
-  - Delete via POST + confirm JS  
-
----
-
-## Backup & Manutenzione
-
-- Salva regolarmente `database.db`.  
-- Pulisci `static/uploads` periodicamente.  
-- Monitora i log con `docker compose logs -f`.  
-
----
-
-## Possibili Estensioni
-
-- Email o push notifications  
-- API REST/GraphQL  
-- 2FA / OAuth2  
-- Reportistica (grafici, CSV/PDF)  
-- i18n / multi-lingua  
-- Ruoli più granulari  
-
----
+Basta copiare `database.db` e la cartella `static/` (foto, libretti, foto profilo).
 
 ## Licenza
 
-Rilasciato sotto **MIT License**. Vedi [LICENSE](LICENSE) per i dettagli.  
+MIT

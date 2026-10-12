@@ -1,0 +1,222 @@
+/* OfficinaOnline – stile
+   Asfalto per la struttura, blu targa come accento, giallo segnale / rosso / verde per gli stati. */
+
+:root {
+  --asfalto: #232b33;
+  --asfalto-2: #2f3a44;
+  --fondo: #eceff2;
+  --superficie: #ffffff;
+  --inchiostro: #1c242b;
+  --tenue: #5d6975;
+  --bordo: #d5dbe1;
+  --blu-targa: #0b3a9e;
+  --giallo: #f2b705;
+  --giallo-fondo: #fff4cf;
+  --rosso: #c0322b;
+  --rosso-fondo: #fde4e2;
+  --verde: #2f7d43;
+  --verde-fondo: #e1f2e5;
+
+  --bs-body-font-family: "Barlow", system-ui, sans-serif;
+  --bs-body-bg: var(--fondo);
+  --bs-body-color: var(--inchiostro);
+  --bs-primary: var(--blu-targa);
+  --bs-primary-rgb: 11, 58, 158;
+  --bs-link-color: var(--blu-targa);
+  --bs-link-color-rgb: 11, 58, 158;
+  --bs-border-color: var(--bordo);
+  --bs-border-radius: .375rem;
+}
+
+[data-bs-theme="dark"] {
+  --fondo: #161b20;
+  --superficie: #1f262d;
+  --inchiostro: #e3e8ec;
+  --tenue: #9aa6b1;
+  --bordo: #34404b;
+  --blu-targa: #6f9cff;
+  --giallo-fondo: #3b3112;
+  --rosso-fondo: #3d1b19;
+  --verde-fondo: #17301e;
+  --rosso: #ff7a72;
+  --verde: #6fcf86;
+  --bs-body-bg: var(--fondo);
+  --bs-body-color: var(--inchiostro);
+  --bs-primary-rgb: 111, 156, 255;
+  --bs-link-color: var(--blu-targa);
+  --bs-link-color-rgb: 111, 156, 255;
+  --bs-border-color: var(--bordo);
+}
+
+body { background: var(--fondo); font-size: 1.02rem; }
+
+h1, h2, h3, h4, h5, .titolo {
+  font-family: "Barlow Semi Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+  font-weight: 600;
+  color: var(--inchiostro);
+  letter-spacing: .005em;
+}
+h1 { font-size: clamp(1.6rem, 1.2rem + 1.4vw, 2.2rem); }
+
+.btn-primary {
+  --bs-btn-bg: var(--blu-targa); --bs-btn-border-color: var(--blu-targa);
+  --bs-btn-hover-bg: #082c78; --bs-btn-hover-border-color: #082c78;
+  --bs-btn-active-bg: #072664;
+}
+[data-bs-theme="dark"] .btn-primary { --bs-btn-color: #0e1a33; --bs-btn-hover-bg: #8fb2ff; --bs-btn-hover-color:#0e1a33; }
+.btn { font-weight: 500; }
+:focus-visible { outline: 3px solid var(--giallo); outline-offset: 2px; }
+
+/* ── Barra superiore ───────────────────────────────────────────── */
+.barra {
+  background: var(--asfalto);
+  border-bottom: 4px solid var(--giallo);
+}
+.barra .navbar-brand { font-family: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif; font-weight: 700; font-size: 1.35rem; color: #fff; }
+.barra .navbar-brand i { color: var(--giallo); }
+.barra .nav-link { color: #c9d2da; font-weight: 500; padding: .9rem .9rem !important; border-bottom: 3px solid transparent; margin-bottom: -4px; }
+.barra .nav-link:hover { color: #fff; }
+.barra .nav-link.active { color: #fff; border-bottom-color: #fff; }
+.barra .dropdown-toggle { color: #fff; }
+.avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: var(--asfalto-2); color: #fff;
+  display: inline-grid; place-items: center; font-weight: 600; font-size: .9rem; }
+
+/* Navigazione in basso su smartphone */
+.nav-mobile {
+  position: fixed; inset: auto 0 0 0; z-index: 1030;
+  background: var(--asfalto); display: flex; padding-bottom: env(safe-area-inset-bottom);
+}
+.nav-mobile a { flex: 1; text-align: center; color: #aeb9c3; text-decoration: none; font-size: .75rem; padding: .45rem 0 .5rem; }
+.nav-mobile a i { display: block; font-size: 1.3rem; line-height: 1.2; }
+.nav-mobile a.active { color: #fff; box-shadow: inset 0 3px 0 var(--giallo); }
+@media (max-width: 991.98px) { main { padding-bottom: 5rem; } }
+
+/* ── Targa italiana (elemento distintivo) ───────────────────────── */
+.targa {
+  display: inline-flex; align-items: stretch; vertical-align: middle;
+  background: #fff; color: #111; border: 2px solid #1b1b1b; border-radius: 5px;
+  font-family: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif; font-weight: 600; line-height: 1;
+  overflow: hidden; white-space: nowrap; box-shadow: 0 1px 0 rgba(0,0,0,.15);
+}
+.targa .eu {
+  background: #0b3a9e; color: #fff; font-size: .55em; width: 1.5em;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+  padding: .25em 0 .3em; font-weight: 600;
+}
+.targa .eu::before { content: "★"; color: #ffd400; font-size: .9em; margin-bottom: auto; }
+.targa .num { padding: .22em .5em .2em; letter-spacing: .06em; font-size: 1em; }
+.targa.grande { font-size: 2rem; border-width: 3px; border-radius: 7px; }
+.targa.media { font-size: 1.25rem; }
+.targa.piccola { font-size: .95rem; border-width: 1.5px; }
+
+/* ── Pannelli ───────────────────────────────────────────────────── */
+.pannello {
+  background: var(--superficie); border: 1px solid var(--bordo); border-radius: .5rem;
+}
+.pannello > .testa {
+  display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+  padding: .85rem 1rem; border-bottom: 1px solid var(--bordo);
+}
+.pannello > .testa h2 { font-size: 1.2rem; margin: 0; }
+.pannello > .corpo { padding: 1rem; }
+.vuoto { color: var(--tenue); padding: 1.5rem 1rem; text-align: center; }
+.vuoto i { font-size: 1.8rem; display: block; margin-bottom: .35rem; opacity: .6; }
+.tenue { color: var(--tenue); }
+
+/* ── Stato (scaduta / imminente / ok) ──────────────────────────── */
+.stato { display: inline-flex; align-items: center; gap: .3rem; font-size: .82rem; font-weight: 600;
+  padding: .15rem .55rem; border-radius: 999px; white-space: nowrap; }
+.stato-scaduta { background: var(--rosso-fondo); color: var(--rosso); }
+.stato-imminente { background: var(--giallo-fondo); color: #7a5a00; }
+[data-bs-theme="dark"] .stato-imminente { color: var(--giallo); }
+.stato-ok { background: var(--verde-fondo); color: var(--verde); }
+.stato-none { background: var(--fondo); color: var(--tenue); }
+
+/* Lista impegni (dashboard / scadenzario) */
+.impegno { display: grid; grid-template-columns: auto 1fr auto; gap: .35rem 1rem; align-items: center;
+  padding: .8rem 1rem; border-bottom: 1px solid var(--bordo); border-left: 5px solid transparent; }
+.impegno:last-child { border-bottom: 0; }
+.impegno.scaduta { border-left-color: var(--rosso); }
+.impegno.imminente { border-left-color: var(--giallo); }
+.impegno.ok { border-left-color: var(--verde); }
+.impegno .cosa { font-weight: 600; font-size: 1.05rem; }
+.impegno .quando { color: var(--tenue); font-size: .92rem; }
+.impegno .azioni { display: flex; gap: .4rem; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+@media (max-width: 575.98px) {
+  .impegno { grid-template-columns: 1fr; gap: .3rem; }
+  .impegno .azioni { justify-content: flex-start; }
+}
+
+/* Sommario dashboard */
+.sommario { font-family: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif; font-size: 1.15rem; color: var(--tenue); }
+.sommario strong { color: var(--inchiostro); }
+.sommario .r { color: var(--rosso); }
+.sommario .g { color: #8a6500; }
+[data-bs-theme="dark"] .sommario .g { color: var(--giallo); }
+
+/* Schede veicolo */
+.scheda-veicolo { display: block; text-decoration: none; color: inherit; height: 100%;
+  background: var(--superficie); border: 1px solid var(--bordo); border-radius: .5rem; padding: 1rem;
+  transition: border-color .15s; }
+.scheda-veicolo:hover { border-color: var(--blu-targa); color: inherit; }
+.scheda-veicolo .modello { font-family: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif; font-size: 1.2rem; font-weight: 600; margin-top: .6rem; }
+.dati { display: grid; grid-template-columns: auto 1fr; gap: .2rem .9rem; font-size: .93rem; margin: 0; }
+.dati dt { font-weight: 500; color: var(--tenue); }
+.dati dd { margin: 0; }
+
+/* Contachilometri */
+.contakm { font-family: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif; font-weight: 600; font-size: 1.6rem; letter-spacing: .04em; }
+
+/* Barra avanzamento tagliando */
+.avanzamento { height: .55rem; background: var(--fondo); border-radius: 999px; overflow: hidden; }
+.avanzamento > span { display: block; height: 100%; background: var(--verde); }
+.avanzamento.imminente > span { background: var(--giallo); }
+.avanzamento.scaduta > span { background: var(--rosso); }
+
+/* Storico interventi (cronologia) */
+.cronologia { list-style: none; padding: 0; margin: 0; }
+.cronologia > li { position: relative; padding: .9rem 1rem .9rem 2.4rem; border-bottom: 1px solid var(--bordo); }
+.cronologia > li:last-child { border-bottom: 0; }
+.cronologia > li::before { content: ""; position: absolute; left: 1.05rem; top: 0; bottom: 0; width: 2px; background: var(--bordo); }
+.cronologia > li::after { content: ""; position: absolute; left: .78rem; top: 1.2rem; width: .6rem; height: .6rem; border-radius: 50%;
+  background: var(--superficie); border: 2px solid var(--blu-targa); }
+.cronologia > li.tagliando::after { background: var(--blu-targa); }
+.voci { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .45rem; padding: 0; list-style: none; }
+.voci li { background: var(--fondo); border: 1px solid var(--bordo); border-radius: .3rem; padding: .05rem .45rem; font-size: .85rem; }
+.voci li small { color: var(--tenue); }
+
+/* Galleria */
+.galleria { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: .5rem; }
+.galleria button { padding: 0; border: 0; background: none; border-radius: .35rem; overflow: hidden; aspect-ratio: 4/3; }
+.galleria img { width: 100%; height: 100%; object-fit: cover; }
+
+/* Form intervento: voci a scelta */
+.voce { border: 1px solid var(--bordo); border-radius: .4rem; padding: .55rem .75rem; background: var(--superficie); }
+.voce:has(input[type=checkbox]:checked) { border-color: var(--blu-targa); box-shadow: inset 3px 0 0 var(--blu-targa); }
+.voce .dettagli { display: none; margin-top: .5rem; }
+.voce:has(input[type=checkbox]:checked) .dettagli { display: flex; }
+.gruppo-voci h3 { font-size: 1rem; color: var(--tenue); margin: 1rem 0 .5rem; }
+
+/* Tabella veicoli */
+.table { --bs-table-bg: var(--superficie); }
+.table thead th { font-weight: 600; color: var(--tenue); border-bottom-width: 2px; font-size: .9rem; }
+
+/* Login */
+.login-sfondo { min-height: 100vh; display: grid; place-items: center; padding: 1rem;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 46px, rgba(255,255,255,.035) 46px 48px),
+    var(--asfalto); }
+.login-box { width: 100%; max-width: 400px; background: var(--superficie); border-radius: .6rem; overflow: hidden;
+  border-top: 6px solid var(--giallo); }
+.login-box .testa { padding: 1.6rem 1.6rem .4rem; }
+.login-box form { padding: 0 1.6rem 1.6rem; }
+
+.form-label { font-weight: 500; margin-bottom: .25rem; }
+.form-text { color: var(--tenue); }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+@media print {
+  .barra, .nav-mobile, .no-print, .btn { display: none !important; }
+  body { background: #fff; }
+  .pannello { border-color: #999; }
+}

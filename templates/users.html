@@ -1,39 +1,45 @@
-<!--
-File: users.html
-Template Jinja2 per l'app Officina.
-Spiega sezioni e blocchi del template.
--->
-
-<!--
-File: users.html
-HTML/Jinja2 template for the officina project.
-Add section comments as needed.
--->
-
-<!-- Estende il layout base -->
+{# Gestione utenti (solo admin) #}
 {% extends 'base.html' %}
-<!-- Inizio del blocco content: qui viene inserito il contenuto della pagina -->
+{% from '_macros.html' import csrf %}
+{% block title %}Utenti{% endblock %}
 {% block content %}
-<h2>👥 Gestione Utenti</h2>
-<a href="{{ url_for('users_add') }}" class="btn btn-primary mb-3">➕ Aggiungi Utente</a>
-<table class="table">
-  <thead><tr><th>ID</th><th>Username</th><th>Admin</th><th>Superadmin</th><th>Forza cambio</th><th>Azioni</th></tr></thead>
+<div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+  <h1 class="mb-0">Utenti</h1>
+  <a href="{{ url_for('users_add') }}" class="btn btn-primary"><i class="bi bi-person-plus"></i> Nuovo utente</a>
+</div>
+<div class="pannello">
+<div class="table-responsive">
+<table class="table align-middle mb-0">
+  <thead><tr><th>Utente</th><th>Ruolo</th><th class="text-end">Veicoli</th><th></th></tr></thead>
   <tbody>
-    {% for u in users %}
+  {% for u in users %}
     <tr>
-      <td>{{ u.id if u.id is defined else u[0] }}</td>
-      <td>{{ u.username if u.username is defined else u[1] }}</td>
-      <td>{{ 'Sì' if u.is_admin else 'No' }}</td>
-      <td>{{ 'Sì' if u.is_superadmin else 'No' }}</td>
-      <td>{{ 'Sì' if u.must_change_password else 'No' }}</td>
-      <td class="d-flex gap-1">
-        <a href="{{ url_for('users_edit', uid=u.id if u.id is defined else u[0]) }}" class="btn btn-warning btn-sm">Modifica</a>
-        {% if not (u.is_superadmin if u.is_superadmin is defined else (u[5] if u|length>5 else False)) %}
-          <a href="{{ url_for('users_delete', uid=u.id if u.id is defined else u[0]) }}" class="btn btn-danger btn-sm">Elimina</a>
+      <td class="d-flex align-items-center gap-2">
+        {% if u.profile_img %}<img src="{{ url_for('profile_img', fn=u.profile_img) }}" class="avatar" alt="">
+        {% else %}<span class="avatar">{{ u.username[:1]|upper }}</span>{% endif %}
+        <div>
+          <strong>{{ u.username }}</strong>{% if u.id == current_user.id %} <span class="tenue small">(tu)</span>{% endif %}
+          {% if u.must_change_password %}<div class="small tenue"><i class="bi bi-key"></i> deve cambiare password</div>{% endif %}
+        </div>
+      </td>
+      <td>{% if u.is_superadmin %}Amministratore principale{% elif u.is_admin %}Amministratore{% else %}Utente{% endif %}</td>
+      <td class="text-end">{{ u.n_veicoli }}</td>
+      <td class="text-end text-nowrap">
+        {% if not u.is_superadmin or u.id == current_user.id %}
+          <a href="{{ url_for('users_edit', uid=u.id) }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i> Modifica</a>
+        {% endif %}
+        {% if not u.is_superadmin and u.id != current_user.id %}
+          <form method="post" action="{{ url_for('users_delete', uid=u.id) }}" class="d-inline"
+                onsubmit="return confirm({{ ('Eliminare l\'utente ' ~ u.username ~ '?')|tojson|forceescape }});">
+            {{ csrf() }}<button class="btn btn-sm btn-outline-danger" aria-label="Elimina {{ u.username }}"><i class="bi bi-trash"></i></button>
+          </form>
         {% endif %}
       </td>
     </tr>
-    {% endfor %}
+  {% endfor %}
   </tbody>
 </table>
-{% endblock %}<!-- Fine del blocco content -->
+</div>
+</div>
+<p class="small tenue mt-3">Gli utenti vedono solo i propri veicoli; gli amministratori li vedono tutti. Prima di eliminare un utente, assegna i suoi veicoli a qualcun altro.</p>
+{% endblock %}

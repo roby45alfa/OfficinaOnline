@@ -1,0 +1,121 @@
+{# Form unico per aggiungere o modificare un veicolo #}
+{% extends 'base.html' %}
+{% from '_macros.html' import targa, csrf %}
+{% block title %}{{ 'Nuovo veicolo' if nuovo else 'Modifica ' ~ (veicolo.targa|targa) }}{% endblock %}
+{% block content %}
+<nav class="mb-2 small">
+  {% if nuovo %}<a href="{{ url_for('veicoli') }}"><i class="bi bi-arrow-left"></i> Veicoli</a>
+  {% else %}<a href="{{ url_for('dettaglio_veicolo', vid=veicolo.id) }}"><i class="bi bi-arrow-left"></i> Torna alla scheda</a>{% endif %}
+</nav>
+<h1 class="mb-4">{{ 'Nuovo veicolo' if nuovo else 'Modifica veicolo' }}</h1>
+
+<form method="post" enctype="multipart/form-data" class="row g-4" style="max-width: 960px">
+  {{ csrf() }}
+  <div class="col-12"><section class="pannello">
+    <div class="testa"><h2>Veicolo</h2></div>
+    <div class="corpo"><div class="row g-3">
+      <div class="col-sm-4">
+        <label class="form-label" for="targa">Targa *</label>
+        <input id="targa" name="targa" class="form-control text-uppercase" required value="{{ veicolo.targa or '' }}" placeholder="AB123CD" autocapitalize="characters">
+      </div>
+      <div class="col-sm-4"><label class="form-label" for="marca">Marca</label><input id="marca" name="marca" class="form-control" value="{{ veicolo.marca or '' }}"></div>
+      <div class="col-sm-4"><label class="form-label" for="modello">Modello</label><input id="modello" name="modello" class="form-control" value="{{ veicolo.modello or '' }}"></div>
+      <div class="col-6 col-sm-4"><label class="form-label" for="anno">Anno</label><input id="anno" name="anno" type="number" min="1900" max="2100" class="form-control" value="{{ veicolo.anno or '' }}"></div>
+      <div class="col-6 col-sm-4"><label class="form-label" for="km">Km attuali</label><input id="km" name="km" type="number" min="0" inputmode="numeric" class="form-control" value="{{ veicolo.km if veicolo.km is not none else '' }}"></div>
+      <div class="col-sm-4">
+        <label class="form-label" for="carburante">Alimentazione</label>
+        <select id="carburante" name="carburante" class="form-select">
+          <option value="">—</option>
+          {% for c in CARBURANTI %}<option {{ 'selected' if veicolo.carburante == c }}>{{ c }}</option>{% endfor %}
+        </select>
+      </div>
+    </div></div>
+  </section></div>
+
+  <div class="col-12"><section class="pannello">
+    <div class="testa"><h2>Proprietario</h2></div>
+    <div class="corpo"><div class="row g-3">
+      <div class="col-sm-6"><label class="form-label" for="nome">Nome</label><input id="nome" name="nome" class="form-control" value="{{ veicolo.nome or '' }}" autocomplete="off"></div>
+      <div class="col-sm-6"><label class="form-label" for="cognome">Cognome</label><input id="cognome" name="cognome" class="form-control" value="{{ veicolo.cognome or '' }}" autocomplete="off"></div>
+      {% if utenti %}
+      <div class="col-sm-6">
+        <label class="form-label" for="owner_id">Utente che può vederlo</label>
+        <select id="owner_id" name="owner_id" class="form-select">
+          {% for u in utenti %}
+            <option value="{{ u.id }}" {{ 'selected' if (veicolo.owner_id or current_user.id) == u.id }}>{{ u.username }}</option>
+          {% endfor %}
+        </select>
+        <div class="form-text">Solo gli admin vedono questo campo.</div>
+      </div>
+      {% endif %}
+    </div></div>
+  </section></div>
+
+  <div class="col-12" id="intervalli"><section class="pannello">
+    <div class="testa"><h2>Intervallo tagliando</h2></div>
+    <div class="corpo"><div class="row g-3">
+      <div class="col-6 col-sm-4">
+        <label class="form-label" for="intervallo_km">Ogni (km)</label>
+        <input id="intervallo_km" name="intervallo_km" type="number" min="1000" step="500" class="form-control" value="{{ veicolo.intervallo_km or 15000 }}">
+      </div>
+      <div class="col-6 col-sm-4">
+        <label class="form-label" for="intervallo_mesi">oppure ogni (mesi)</label>
+        <input id="intervallo_mesi" name="intervallo_mesi" type="number" min="1" max="60" class="form-control" value="{{ veicolo.intervallo_mesi or 12 }}">
+      </div>
+      <div class="col-12 form-text mt-1">Vale la prima soglia raggiunta. Trovi i valori sul libretto di manutenzione del costruttore.</div>
+    </div></div>
+  </section></div>
+
+  <div class="col-12"><section class="pannello">
+    <div class="testa"><h2>Documenti, foto e note</h2></div>
+    <div class="corpo"><div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label" for="immagini">{{ 'Aggiungi foto' if not nuovo else 'Foto' }}</label>
+        <input id="immagini" type="file" name="immagini" multiple accept="image/*" class="form-control">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="libretto">{{ 'Sostituisci libretto' if veicolo.libretto else 'Libretto' }} <span class="tenue fw-normal">(PDF o foto)</span></label>
+        <input id="libretto" type="file" name="libretto" accept="application/pdf,image/*" class="form-control">
+      </div>
+      <div class="col-12">
+        <label class="form-label" for="note">Note</label>
+        <textarea id="note" name="note" rows="3" class="form-control" placeholder="Codice motore, misura gomme, particolarità…">{{ veicolo.note or '' }}</textarea>
+      </div>
+    </div></div>
+  </section></div>
+
+  <div class="col-12 d-flex gap-2">
+    <button class="btn btn-primary btn-lg">{{ 'Aggiungi veicolo' if nuovo else 'Salva modifiche' }}</button>
+    <a href="{{ url_for('veicoli') if nuovo else url_for('dettaglio_veicolo', vid=veicolo.id) }}" class="btn btn-lg btn-outline-secondary">Annulla</a>
+  </div>
+</form>
+
+{% if not nuovo and (veicolo.immagini or veicolo.libretto) %}
+<section class="pannello mt-4" style="max-width: 960px">
+  <div class="testa"><h2>File già caricati</h2></div>
+  <div class="corpo">
+    {% if veicolo.libretto %}
+      <div class="d-flex align-items-center gap-2 mb-3">
+        <a href="{{ url_for('download_libretto', fn=veicolo.libretto) }}" target="_blank" rel="noopener"><i class="bi bi-file-earmark-text"></i> Libretto</a>
+        <form method="post" action="{{ url_for('libretto_elimina', vid=veicolo.id) }}" onsubmit="return confirm('Eliminare il libretto?');">
+          {{ csrf() }}<button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> Elimina</button>
+        </form>
+      </div>
+    {% endif %}
+    {% if veicolo.immagini %}
+      <div class="galleria">
+        {% for img in veicolo.immagini %}
+          <div class="position-relative">
+            <img src="{{ url_for('uploads', fn=img) }}" alt="Foto {{ loop.index }}" class="rounded w-100" style="aspect-ratio:4/3; object-fit:cover">
+            <form method="post" action="{{ url_for('foto_elimina', vid=veicolo.id) }}" class="position-absolute top-0 end-0 m-1" onsubmit="return confirm('Eliminare questa foto?');">
+              {{ csrf() }}<input type="hidden" name="fn" value="{{ img }}">
+              <button class="btn btn-sm btn-danger" aria-label="Elimina foto {{ loop.index }}"><i class="bi bi-trash"></i></button>
+            </form>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+{% endblock %}

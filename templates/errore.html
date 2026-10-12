@@ -1,0 +1,12 @@
+{# Pagina di errore #}
+{% extends 'base.html' if current_user else 'errore_base.html' %}
+{% block title %}Errore {{ codice }}{% endblock %}
+{% block content %}
+<div class="pannello mx-auto text-center" style="max-width: 480px">
+  <div class="corpo py-5">
+    <div class="display-5 fw-semibold tenue">{{ codice }}</div>
+    <p class="fs-5 mt-2">{{ messaggio }}</p>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-primary">Torna al riepilogo</a>
+  </div>
+</div>
+{% endblock %}
